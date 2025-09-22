@@ -5,6 +5,9 @@ namespace App\Providers;
 use App\Listeners\CheckoutableListener;
 use App\Listeners\LogListener;
 use Illuminate\Foundation\Support\Providers\EventServiceProvider as ServiceProvider;
+use App\Models\User;
+use App\Observers\UserObserver;
+
 
 class EventServiceProvider extends ServiceProvider
 {
@@ -32,4 +35,16 @@ class EventServiceProvider extends ServiceProvider
         LogListener::class,
         CheckoutableListener::class,
     ];
+ /**
+     * Register any events for your application.
+     *
+     * @return void
+     */
+    public function boot()
+    {
+        parent::boot();
+
+        // Mendaftarkan UserObserver agar aktif
+        //User::observe(UserObserver::class); 
+    }
 }

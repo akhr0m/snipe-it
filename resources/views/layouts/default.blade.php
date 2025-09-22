@@ -752,8 +752,32 @@ dir="{{ Helper::determineLanguageDirection() }}">
                                     <span>{{ trans('general.reports') }}</span>
                                     <x-icon type="angle-left" class="pull-right"/>
                                 </a>
-
                                 <ul class="treeview-menu">
+
+
+
+
+
+
+
+
+
+        <li{{ (Request::is('bast-report/search') ? ' class="active"' : '') }}>
+            <a href="{{ route('bast.search') }}">Find BAST</a>
+        </li>
+
+
+
+
+
+
+
+
+
+
+
+
+
                                     <li {{!! (Request::is('reports/activity') ? ' class="active"' : '') !!}}>
                                         <a href="{{ route('reports.activity') }}">
                                             {{ trans('general.activity_report') }}

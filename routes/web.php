@@ -28,6 +28,7 @@ use App\Livewire\Importer;
 use App\Models\ReportTemplate;
 use Illuminate\Support\Facades\Route;
 use Tabuna\Breadcrumbs\Trail;
+use App\Http\Controllers\Users\UsersController;
 
 Route::group(['middleware' => 'auth'], function () {
     /*
@@ -712,3 +713,18 @@ Route::middleware(['auth'])->get(
     ->breadcrumbs(fn (Trail $trail) =>
     $trail->push('Home', route('home'))
     );
+
+// KODE BARU (BENAR)
+Route::get('users/{user}/bast-report', [UsersController::class, 'getBastReport'])->name('users.bast_report');
+
+// Rute untuk menampilkan BAST dari halaman user
+Route::get('users/{user}/bast-report', [UsersController::class, 'getBastReport'])->name('users.bast_report');
+
+// Rute untuk mengarahkan pencarian BAST dari halaman user
+Route::get('bast-report/find', [UsersController::class, 'findBastReport'])->name('bast.find');
+
+//Untuk menampilkan halaman pencarian
+Route::get('bast-report/search', [UsersController::class, 'showBastSearchPage'])->name('bast.search');
+
+//checkBastExists
+Route::get('bast-report/check', [UsersController::class, 'checkBastExists'])->name('bast.check');

@@ -17,6 +17,8 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Password;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 use App\Notifications\CurrentInventory;
+use App\Models\UserReport;
+use Carbon\Carbon;
 
 /**
  * This controller handles all actions related to Users for
@@ -71,6 +73,19 @@ class UsersController extends Controller
         return view('users/edit', compact('groups', 'userGroups', 'permissions', 'userPermissions'))
             ->with('user', $user);
     }
+
+public function checkBastExists(\Illuminate\Http\Request $request)
+{
+    $reportNumber = $request->input('number');
+    $exists = false;
+
+    if ($reportNumber) {
+        $exists = \App\Models\UserReport::where('report_number', $reportNumber)->exists();
+    }
+
+    return response()->json(['found' => $exists]);
+}
+
 
     /**
      * Validate and store the new user data, or return an error.
@@ -683,4 +698,109 @@ class UsersController extends Controller
 
         return redirect()->back()->with('error', trans('general.pwd_reset_not_sent'));
     }
+
+public function getBastReport(User $user)
+{
+    // 1. Ambil data dasar
+    $adminUser = \Illuminate\Support\Facades\Auth::user();
+    $assets = $user->assets()->get();
+    $settings = \App\Models\Setting::getSettings();
+    $today = \Carbon\Carbon::now();
+
+    // 2. Buat Nomor Laporan BARU dengan aturan reset per tahun
+    $currentYear = $today->year;
+
+    // Cari BAST terakhir yang dibuat di TAHUN INI
+    $lastRecordThisYear = \App\Models\UserReport::whereYear('handover_date', $currentYear)->latest('id')->first();
+    
+    $nextSequence = 1; // Atur nomor urut default ke 1
+
+    if ($lastRecordThisYear) {
+        // Jika sudah ada BAST di tahun ini, ambil nomor urut terakhirnya dan tambahkan 1
+        $lastSequence = (int) explode('/', $lastRecordThisYear->report_number)[0];
+        $nextSequence = $lastSequence + 1;
+    }
+    
+    $sequence = str_pad($nextSequence, 5, '0', STR_PAD_LEFT);
+
+
+    $monthRomanMap = ['M' => 1000, 'CM' => 900, 'D' => 500, 'CD' => 400, 'C' => 100, 'XC' => 90, 'L' => 50, 'XL' => 40, 'X' => 10, 'IX' => 9, 'V' => 5, 'IV' => 4, 'I' => 1];
+    $month = $today->month;
+    $monthRoman = '';
+    foreach ($monthRomanMap as $roman => $int) {
+        while ($month >= $int) {
+            $month -= $int;
+            $monthRoman .= $roman;
+        }
+    }
+    $year = $today->year;
+    $newReportNumber = "{$sequence}/BAST/IT/HO/{$monthRoman}/{$year}";
+
+    // 3. Siapkan data aset untuk disimpan (snapshot)
+    $assetsSnapshot = $assets->map(function ($asset) {
+        return [
+            'asset_tag' => $asset->asset_tag,
+            'name' => $asset->name,
+            'serial' => $asset->serial,
+            'notes' => $asset->notes,
+        ];
+    });
+
+    // 4. SIMPAN CATATAN BARU KE DATABASE
+    $newReportRecord = \App\Models\UserReport::create([
+        'recipient_id' => $user->id,
+        'giver_id' => $adminUser->id,
+        'report_number' => $newReportNumber,
+        'assets_snapshot' => json_encode($assetsSnapshot),
+        'handover_date' => $today,
+    ]);
+
+    // 5. Kirim data ke view untuk ditampilkan
+    // Penting: kita ubah $today menjadi format string di sini
+    $todayFormatted = $today->isoFormat('dddd, D MMMM YYYY');
+
+    return view('reports.bast', compact('user', 'adminUser', 'assets', 'settings', 'newReportRecord', 'todayFormatted'));
+}
+
+public function findBastReport(\Illuminate\Http\Request $request)
+{
+    // 1. Ambil nomor BAST dari URL (?number=...)
+    $reportNumber = $request->input('number');
+
+    if (!$reportNumber) {
+        // Jika tidak ada input sama sekali, kembali dengan pesan warning
+        return redirect()->back()->with('warning', 'Silakan masukkan Nomor BAST yang ingin dicari.');
+    }
+
+    // 2. Cari record BAST di database berdasarkan nomornya
+    $reportRecord = \App\Models\UserReport::where('report_number', $reportNumber)->first();
+
+    if (!$reportRecord) {
+        return redirect()->back()->with('error', 'Laporan BAST tidak ditemukan. Mohon periksa kembali nomor yang Anda masukkan.');
+    }
+
+    // 3. Rekonstruksi data dari snapshot yang tersimpan di database
+    $user = \App\Models\User::find($reportRecord->recipient_id);
+    $adminUser = \App\Models\User::find($reportRecord->giver_id);
+    $assets = collect(json_decode($reportRecord->assets_snapshot)); // Mengubah data JSON kembali menjadi koleksi
+    $settings = \App\Models\Setting::getSettings();
+    $todayFormatted = \Carbon\Carbon::parse($reportRecord->handover_date)->isoFormat('dddd, D MMMM YYYY');
+
+    // Ganti nama variabel agar sesuai dengan view yang sudah ada
+    $newReportRecord = $reportRecord;
+
+    // Jika salah satu user (penerima/penyerah) sudah dihapus dari sistem, beri fallback
+    if (!$user || !$adminUser) {
+         return "Data BAST ditemukan, tetapi data pengguna penyerah atau penerima telah dihapus dari sistem.";
+    }
+
+    // 4. Tampilkan view yang sama dengan data yang sudah direkonstruksi
+    return view('reports.bast', compact('user', 'adminUser', 'assets', 'settings', 'newReportRecord', 'todayFormatted'));
+}
+
+public function showBastSearchPage()
+{
+    return view('reports.find-bast');
+}
+
 }

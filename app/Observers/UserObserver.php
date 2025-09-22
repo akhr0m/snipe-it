@@ -5,6 +5,8 @@ namespace App\Observers;
 use App\Models\Actionlog;
 use App\Models\User;
 use Illuminate\Support\Facades\Auth;
+use App\Models\UserReport;
+use Carbon\Carbon;
 
 class UserObserver
 {
@@ -107,6 +109,10 @@ class UserObserver
         $logAction->created_at = date('Y-m-d H:i:s');
         $logAction->created_by = auth()->id();
         $logAction->logaction('create');
+
+        // Fungsi ini akan memanggil helper function di bawah untuk membuat nomor laporan BAST
+        $this->generateReportNumberForUser($user);
+
     }
 
     /**
@@ -145,5 +151,57 @@ class UserObserver
         $logAction->logaction('restore');
     }
 
+
+    //==================================================================================
+    // ▼▼▼ TAMBAHKAN DUA FUNGSI "HELPER" BARU DI SINI, DI BAGIAN AKHIR CLASS ▼▼▼
+    //==================================================================================
+
+    /**
+     * Generate a unique report number for a new user.
+     *
+     * @param \App\Models\User $user
+     */
+    private function generateReportNumberForUser(User $user)
+    {
+        // 1. Dapatkan nomor urut terakhir + 1
+        $lastId = UserReport::max('id') ?? 0;
+        $sequence = str_pad($lastId + 1, 5, '0', STR_PAD_LEFT);
+
+        // 2. Dapatkan bulan dalam romawi
+        $monthRoman = $this->toRoman(Carbon::now()->month);
+        
+        // 3. Dapatkan tahun
+        $year = Carbon::now()->year;
+
+        // 4. Gabungkan format
+        $reportNumber = "{$sequence}/BAST/IT/HO/{$monthRoman}/{$year}";
+
+        // 5. Simpan ke tabel user_reports
+        UserReport::create([
+            'user_id' => $user->id,
+            'report_number' => $reportNumber,
+        ]);
+    }
+
+    /**
+     * Convert a number to Roman numeral.
+     *
+     * @param int $number
+     * @return string
+     */
+    private function toRoman($number) {
+        $map = ['M' => 1000, 'CM' => 900, 'D' => 500, 'CD' => 400, 'C' => 100, 'XC' => 90, 'L' => 50, 'XL' => 40, 'X' => 10, 'IX' => 9, 'V' => 5, 'IV' => 4, 'I' => 1];
+        $returnValue = '';
+        while ($number > 0) {
+            foreach ($map as $roman => $int) {
+                if($number >= $int) {
+                    $number -= $int;
+                    $returnValue .= $roman;
+                    break;
+                }
+            }
+        }
+        return $returnValue;
+    }
 
 }
