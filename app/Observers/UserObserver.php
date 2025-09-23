@@ -103,15 +103,6 @@ class UserObserver
      */
     public function created(User $user)
     {
-        $logAction = new Actionlog();
-        $logAction->item_type = User::class; // can we instead say $logAction->item = $asset ?
-        $logAction->item_id = $user->id;
-        $logAction->created_at = date('Y-m-d H:i:s');
-        $logAction->created_by = auth()->id();
-        $logAction->logaction('create');
-
-        // Fungsi ini akan memanggil helper function di bawah untuk membuat nomor laporan BAST
-        $this->generateReportNumberForUser($user);
 
     }
 

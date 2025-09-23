@@ -44,7 +44,5 @@ class EventServiceProvider extends ServiceProvider
     {
         parent::boot();
 
-        // Mendaftarkan UserObserver agar aktif
-        //User::observe(UserObserver::class); 
     }
 }
