@@ -177,7 +177,7 @@
           <div class="admin box box-default">
             <div class="box-body text-center">
               <h5>
-                <a href="{{ route('settings.asset_tags.index') }}" class="settings_button">
+            <a href="{{ `route('settings.asset_tags.index')` }}" class="settings_button" style="pointer-events: none; cursor: default; color: grey;">
                   <x-icon type="asset-tags" class="fa-4x"/>
                   <br><br>
                   <span class="name">{{ trans('general.asset_tags') }}</span>

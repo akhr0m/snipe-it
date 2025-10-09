@@ -76,13 +76,33 @@ class AssetsController extends Controller
      * @param Request $request
      * @internal param int $model_id
      */
-    public function create(Request $request) : View
+
+public function create(Request $request) : View
     {
         $this->authorize('create', Asset::class);
+        
+        // -- MULAI KODE BARU UNTUK GENERATE ASSET TAG --
+        $now = now();
+        $year = $now->year;
+        $romanMonthMap = [1 => 'I', 2 => 'II', 3 => 'III', 4 => 'IV', 5 => 'V', 6 => 'VI', 7 => 'VII', 8 => 'VIII', 9 => 'IX', 10 => 'X', 11 => 'XI', 12 => 'XII'];
+        $romanMonth = $romanMonthMap[$now->month];
+        $prefix = "IT/HO/{$romanMonth}/{$year}/";
+        $lastAsset = \App\Models\Asset::where('asset_tag', 'LIKE', $prefix . '%')->orderBy('id', 'desc')->first();
+        $nextNumber = 1;
+        if ($lastAsset) {
+            $lastTagParts = explode('/', $lastAsset->asset_tag);
+            $lastNumber = (int) end($lastTagParts);
+            $nextNumber = $lastNumber + 1;
+        }
+        $next_asset_tag = $prefix . $nextNumber;
+        // -- SELESAI KODE BARU --
+
+        // Kode asli Anda, dengan tambahan ->with('next_asset_tag', $next_asset_tag)
         $view = view('hardware/edit')
             ->with('statuslabel_list', Helper::statusLabelList())
             ->with('item', new Asset)
-            ->with('statuslabel_types', Helper::statusTypeList());
+            ->with('statuslabel_types', Helper::statusTypeList())
+            ->with('next_asset_tag', $next_asset_tag); // <-- Variabel dikirim ke view di sini
 
         if ($request->filled('model_id')) {
             $selected_model = AssetModel::find($request->input('model_id'));

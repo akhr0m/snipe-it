@@ -192,14 +192,14 @@ Route::group(['prefix' => 'admin', 'middleware' => ['auth', 'authorize:superuser
     Route::post('slack', [SettingsController::class, 'postSlack'])
         ->name('settings.slack.save');
 
-    Route::get('asset_tags', [SettingsController::class, 'getAssetTags'])
-        ->name('settings.asset_tags.index')
-        ->breadcrumbs(fn (Trail $trail) =>
-        $trail->parent('settings.index')
-            ->push(trans('admin/settings/general.asset_tag_title'), route('settings.asset_tags.index')));
+//    Route::get('asset_tags', [SettingsController::class, 'getAssetTags'])
+//        ->name('settings.asset_tags.index')
+//        ->breadcrumbs(fn (Trail $trail) =>
+//        $trail->parent('settings.index')
+//            ->push(trans('admin/settings/general.asset_tag_title'), route('settings.asset_tags.index')));
 
-    Route::post('asset_tags', [SettingsController::class, 'postAssetTags'])
-        ->name('settings.asset_tags.save');
+//    Route::post('asset_tags', [SettingsController::class, 'postAssetTags'])
+//        ->name('settings.asset_tags.save');
 
     Route::get('labels', [SettingsController::class, 'getLabels'])
         ->name('settings.labels.index')

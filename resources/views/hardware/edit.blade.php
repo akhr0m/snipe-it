@@ -23,36 +23,33 @@
 
 
   <!-- Asset Tag -->
-  <div class="form-group {{ $errors->has('asset_tag') ? ' has-error' : '' }}">
+<div class="form-group {{ $errors->has('asset_tag') ? ' has-error' : '' }}">
     <label for="asset_tag" class="col-md-3 control-label">{{ trans('admin/hardware/form.tag') }}</label>
 
-
-
-      @if  ($item->id)
-          <!-- we are editing an existing asset,  there will be only one asset tag -->
-          <div class="col-md-7 col-sm-12">
-
-          <input class="form-control" type="text" name="asset_tags[1]" id="asset_tag" value="{{ old('asset_tag', $item->asset_tag) }}" required>
-              {!! $errors->first('asset_tags', '<span class="alert-msg"><i class="fas fa-times"></i> :message</span>') !!}
-              {!! $errors->first('asset_tag', '<span class="alert-msg"><i class="fas fa-times"></i> :message</span>') !!}
-          </div>
-      @else
-          <!-- we are creating a new asset - let people use more than one asset tag -->
-          <div class="col-md-7 col-sm-12">
-              <input class="form-control" type="text" name="asset_tags[1]" id="asset_tag" value="{{ old('asset_tags.1', \App\Models\Asset::autoincrement_asset()) }}" required>
-              {!! $errors->first('asset_tags', '<span class="alert-msg"><i class="fas fa-times"></i> :message</span>') !!}
-              {!! $errors->first('asset_tag', '<span class="alert-msg"><i class="fas fa-times"></i> :message</span>') !!}
-          </div>
-          <div class="col-md-2 col-sm-12">
-              <button class="add_field_button btn btn-default btn-sm" name="add_field_button">
-                  <x-icon type="plus" />
-                  <span class="sr-only">
-                      {{ trans('general.new') }}
-                  </span>
-              </button>
-          </div>
-      @endif
-  </div>
+    @if ($item->id)
+        <div class="col-md-7 col-sm-12">
+            <input class="form-control" type="text" name="asset_tags[1]" id="asset_tag" value="{{ old('asset_tag', $item->asset_tag) }}" required>
+            {!! $errors->first('asset_tags', '<span class="alert-msg"><i class="fas fa-times"></i> :message</span>') !!}
+            {!! $errors->first('asset_tag', '<span class="alert-msg"><i class="fas fa-times"></i> :message</span>') !!}
+        </div>
+    @else
+        <div class="col-md-7 col-sm-12">
+            {{-- Baris ini diubah untuk menampilkan variabel dari controller dan dinonaktifkan --}}
+              <input class="form-control" type="text" name="asset_tags[1]" id="asset_tag" value="{{ $next_asset_tag }}" readonly>
+            {!! $errors->first('asset_tags', '<span class="alert-msg"><i class="fas fa-times"></i> :message</span>') !!}
+            {!! $errors->first('asset_tag', '<span class="alert-msg"><i class="fas fa-times"></i> :message</span>') !!}
+        </div>
+        {{-- Tombol plus disembunyikan karena tidak diperlukan lagi --}}
+        <div class="col-md-2 col-sm-12" style="display: none;">
+            <button class="add_field_button btn btn-default btn-sm" name="add_field_button">
+                <x-icon type="plus" />
+                <span class="sr-only">
+                    {{ trans('general.new') }}
+                </span>
+            </button>
+        </div>
+    @endif
+</div>
 
     @include ('partials.forms.edit.serial', ['fieldname'=> 'serials[1]', 'old_val_name' => 'serials.1', 'translated_serial' => trans('admin/hardware/form.serial')])
 

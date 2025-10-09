@@ -38,9 +38,39 @@ class Asset extends Depreciable
 
     public const LOCATION = 'location';
     public const ASSET = 'asset';
-    public const USER = 'user';
 
     use Acceptable;
+
+    public const USER = 'user';
+
+
+    //generate format month of asset-tag using romawi format while create a new asset
+    public static function boot()
+    {
+        parent::boot();
+
+        /**
+         * Kode ini berjalan TEPAT SEBELUM sebuah aset baru disimpan ke database.
+         * Ini memastikan asset_tag selalu ter-generate dengan benar di backend.
+         */
+        static::creating(function ($asset) {
+            // Hanya jalankan jika asset_tag belum diisi (sebagai pengaman)
+            if (empty($asset->asset_tag)) { 
+                $now = now();
+                $year = $now->year;
+                $romanMonthMap = [ 1 => 'I', 2 => 'II', 3 => 'III', 4 => 'IV', 5 => 'V', 6 => 'VI', 7 => 'VII', 8 => 'VIII', 9 => 'IX', 10 => 'X', 11 => 'XI', 12 => 'XII' ];
+                $romanMonth = $romanMonthMap[$now->month];
+                $prefix = "IT/HO/{$romanMonth}/{$year}/";
+                $lastAsset = static::where('asset_tag', 'LIKE', $prefix . '%')->orderBy('id', 'desc')->first();
+                $nextNumber = 1;
+                if ($lastAsset) {
+                    $lastTagParts = explode('/', $lastAsset->asset_tag);
+                    $nextNumber = ((int) end($lastTagParts)) + 1;
+                }
+                $asset->asset_tag = $prefix . $nextNumber;
+            }
+        });
+    }
 
     /**
      * Run after the checkout acceptance was declined by the user
