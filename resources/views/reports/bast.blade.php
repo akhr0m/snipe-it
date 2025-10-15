@@ -167,6 +167,8 @@
                 <th style="border: 1px solid black; padding: 5px; text-align: center; font-weight: bold; width: 34%;">Mengetahui</th>
                 <th style="border: 1px solid black; padding: 5px; text-align: center; font-weight: bold; width: 33%;">Diterima Oleh</th>
             </tr>
+
+
         </thead>
         <tbody>
             <tr style="text-align: center;">
@@ -188,6 +190,14 @@
                     <i>{{ $user->jobtitle ?? '' }}</i>
                 </td>
             </tr>
+
+        <tr>
+            <td colspan="3" style="border: none; text-align: left; padding-top: 10px;">
+                <strong>Notes:</strong>
+                <div style="border: 1px solid #000; min-height: 30px; margin-top: 2px;">&nbsp;</div>
+            </td>
+        </tr>
+
         </tbody>
     </table>
 
@@ -224,6 +234,14 @@
                     <i>{{ $adminUser->jobtitle ?? 'IT Department' }}</i>
                 </td>
             </tr>
+
+        <tr>
+            <td colspan="3" style="border: none; text-align: left; padding-top: 10px;">
+                <strong>Notes:</strong>
+                <div style="border: 1px solid #000; min-height: 30px; margin-top: 2px;">&nbsp;</div>
+            </td>
+        </tr>
+
         </tbody>
     </table>
     

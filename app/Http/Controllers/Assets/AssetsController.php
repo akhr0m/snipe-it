@@ -80,7 +80,7 @@ class AssetsController extends Controller
 public function create(Request $request) : View
     {
         $this->authorize('create', Asset::class);
-        
+
         // -- MULAI KODE BARU UNTUK GENERATE ASSET TAG --
         $now = now();
         $year = $now->year;
@@ -355,7 +355,7 @@ public function create(Request $request) : View
         $asset->purchase_date = $request->input('purchase_date', null);
         $asset->next_audit_date = $request->input('next_audit_date', null);
         if ($request->filled('purchase_date') && !$request->filled('asset_eol_date') && ($asset->model->eol > 0)) {
-            $asset->purchase_date = $request->input('purchase_date', null); 
+            $asset->purchase_date = $request->input('purchase_date', null);
             $asset->asset_eol_date = Carbon::parse($request->input('purchase_date'))->addMonths($asset->model->eol)->format('Y-m-d');
             $asset->eol_explicit = false;
         } elseif ($request->filled('asset_eol_date')) {
@@ -662,21 +662,40 @@ public function create(Request $request) : View
      * @since [v1.0]
      * @return \Illuminate\Contracts\View\View
      */
-    public function getClone(Asset $asset)
-    {
-        $this->authorize('create', $asset);
-        $cloned = clone $asset;
-        $cloned->id = null;
-        $cloned->asset_tag = '';
-        $cloned->serial = '';
-        $cloned->assigned_to = '';
-        $cloned->deleted_at = '';
 
-        return view('hardware/edit')
-            ->with('statuslabel_list', Helper::statusLabelList())
-            ->with('statuslabel_types', Helper::statusTypeList())
-            ->with('item', $cloned);
-    }
+
+     public function getClone(Asset $asset)
+     {
+       // PERBAIKAN KRITIS: Periksa jika objek asset tidak ditemukan (null)
+       if (is_null($asset)) {
+           return redirect()->route('hardware.index')
+               ->with('error', trans('admin/hardware/message.does_not_exist'));
+       }
+         $this->authorize('create', $asset);
+
+         // START: Kode ASLI Snipe-IT untuk Clone
+         $cloned = clone $asset;
+         $cloned->id = null;
+         $cloned->asset_tag = '';
+         $cloned->serial = '';
+         $cloned->assigned_to = '';
+         $cloned->deleted_at = '';
+         // END: Kode ASLI Snipe-IT
+
+         // KODE CUSTOM: untuk menghasilkan asset tag berikutnya
+         // Gunakan 'self::' untuk memastikan PHP menemukan fungsi ini di dalam Controller yang sama.
+         // GANTI: Panggil fungsi penomoran khusus untuk CLONE
+         $next_asset_tag = self::getCloneAssetTag();
+
+         return view('hardware/edit')
+             ->with('statuslabel_list', Helper::statusLabelList())
+             ->with('statuslabel_types', Helper::statusTypeList())
+             ->with('item', $cloned)
+             ->with('next_asset_tag', $next_asset_tag); // Mengirimkan tag baru
+     }
+
+
+
 
     /**
      * Return history import view
@@ -724,7 +743,7 @@ public function create(Request $request) : View
             $results = $csv->getRecords();
         } catch (\Exception $e) {
             return back()->with('error', trans('general.error_in_import_file', ['error' => $e->getMessage()]));
-        } 
+        }
         $item = [];
         $status = [];
         $status['error'] = [];
@@ -1043,4 +1062,43 @@ public function create(Request $request) : View
 
         return view('hardware/requested', compact('requestedItems'));
     }
+
+    public static function getCloneAssetTag()
+    {
+        // Ini adalah duplikasi logic penomoran dari fungsi create() Anda
+        $now = now();
+        $year = $now->year;
+        $romanMonthMap = [1 => 'I', 2 => 'II', 3 => 'III', 4 => 'IV', 5 => 'V', 6 => 'VI', 7 => 'VII', 8 => 'VIII', 9 => 'IX', 10 => 'X', 11 => 'XI', 12 => 'XII'];
+        $romanMonth = $romanMonthMap[$now->month];
+        $prefix = "IT/HO/{$romanMonth}/{$year}/"; // Prefix kustom Anda
+
+        $lastAsset = \App\Models\Asset::where('asset_tag', 'LIKE', $prefix . '%')->orderBy('id', 'desc')->first();
+        $nextNumber = 1;
+
+        if ($lastAsset) {
+            $lastTagParts = explode('/', $lastAsset->asset_tag);
+            $lastNumber = is_numeric(end($lastTagParts)) ? (int) end($lastTagParts) : 0;
+            $nextNumber = $lastNumber + 1;
+        }
+
+        $paddedId = str_pad($nextNumber, 4, '0', STR_PAD_LEFT);
+      //  $padding = 4; // Padding yang Anda inginkan (misalnya 0001)
+      //  $paddedId = str_pad($nextNumber, $padding, '0', STR_PAD_LEFT);
+
+        return $prefix . $paddedId;
+    }
+
+    public static function getNextAssetTag()
+    {
+        // LOGIKA ANDA DISINI. Gunakan kode yang benar-benar bersih.
+        $latestAsset = \App\Models\Asset::latest('id')->first();
+        $nextId = $latestAsset ? $latestAsset->id + 1 : 1;
+
+        // Contoh logika penomoran:
+        $prefix = \App\Models\Setting::getSettings()->auto_increment_prefix;
+        $paddedId = str_pad($nextId, 6, '0', STR_PAD_LEFT);
+
+        return $prefix . $paddedId;
+    }
+
 }
