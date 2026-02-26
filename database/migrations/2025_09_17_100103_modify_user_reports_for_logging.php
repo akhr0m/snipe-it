@@ -8,8 +8,8 @@ return new class extends Migration
 {
     public function up(): void
     {
-        Schema::create('user_reports', function (Blueprint $table) {
-            $table->increments('id');
+        Schema::table('user_reports', function (Blueprint $table) {
+//            $table->increments('id');
             $table->integer('recipient_id')->unsigned();
             $table->integer('giver_id')->unsigned();
             $table->string('report_number')->unique();
