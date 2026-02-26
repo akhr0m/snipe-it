@@ -86,7 +86,7 @@
             <td style="width: 50%; vertical-align: top;">
                 <table class="info-table">
                     <tr>
-                        <td style="width: 120px;">Dari / Departemen</td>
+                        <td style="width: 120px;">Tujuan / Jabatan(Departemen)</td>
                         <td>: {{ $adminUser->present()->fullName() }} / {{ $adminUser->department?->name ?? 'IT' }}</td>
                     </tr>
                     <tr>
@@ -106,7 +106,7 @@
             <td style="width: 50%; vertical-align: top;">
                 <table class="info-table">
                     <tr>
-                        <td style="width: 120px;">Tujuan / Departemen</td>
+                        <td style="width: 120px;">Tujuan / Jabatan(Departemen)</td>
                         <td>: {{ $user->present()->fullName() }} - {{ $user->jobtitle ?? $user->department?->name }}</td>
                     </tr>
                     <tr>
