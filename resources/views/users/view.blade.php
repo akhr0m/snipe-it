@@ -195,13 +195,13 @@
 
                 @if($user->allAssignedCount() != '0') 
                   <a href="{{ route('users.bast_report', $user->id) }}" style="width: 100%;" class="btn btn-sm btn-primary btn-social hidden-print" target="_blank" rel="noopener">
-                      <i class="fa fa-print"></i>
-                      Cetak BAST
+                      <i class="fa fa-eye"></i>
+                      Preview BAST
                   </a>
                   @else
                   <button style="width: 100%;" class="btn btn-sm btn-primary btn-social hidden-print" rel="noopener" disabled title="{{ trans('admin/users/message.user_has_no_assets_assigned') }}">
-                      <i class="fa fa-print"></i>
-                      Cetak BAST</button>
+                      <i class="fa fa-eye"></i>
+                      Preview BAST</button>
                 @endif
                 </div>
                 @endcan

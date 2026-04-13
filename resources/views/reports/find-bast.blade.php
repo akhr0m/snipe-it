@@ -57,7 +57,7 @@ Cari Laporan BAST
                                 <td style="text-align: center;">{{ $index + 1 }}</td>
                                 <td>{{ $report->report_number }}</td>
                                 <td>
-                                    {{ $report->recipient ? $report->recipient->first_name . ' ' . $report->recipient->last_name : 'User Tidak Ditemukan / Dihapus' }}
+                                    {{ $report->recipient_display_name }}
                                 </td>
                                 <td style="text-align: center;">
                                     <a href="{{ url('/bast-report/view/' . $report->id) }}" class="btn btn-sm btn-info"

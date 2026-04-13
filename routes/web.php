@@ -94,6 +94,7 @@ Route::group(['middleware' => 'auth'], function () {
 
     // KODE BARU (BENAR)
     Route::get('users/{user}/bast-report', [UsersController::class, 'getBastReport'])->name('users.bast_report');
+    Route::post('users/{user}/bast-report/print', [UsersController::class, 'storeAndPrintBastReport'])->name('users.bast_report.print');
 
     // Rute untuk memproses pencarian BAST dari form
     Route::get('bast-report/find', [\App\Http\Controllers\Users\UsersController::class, 'findBastReport'])->name('bast.find');

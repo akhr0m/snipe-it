@@ -1,7 +1,11 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Berita Acara Serah Terima - {{ $user->present()->fullName() }}</title>
+    @php
+        $recipientFullName = trim(collect([data_get($user, 'first_name'), data_get($user, 'last_name')])->filter()->implode(' '));
+        $adminFullName = trim(collect([data_get($adminUser, 'first_name'), data_get($adminUser, 'last_name')])->filter()->implode(' '));
+    @endphp
+    <title>Berita Acara Serah Terima - {{ $recipientFullName }}</title>
     <style>
         body {
             font-family: Arial, Helvetica, sans-serif;
@@ -58,27 +62,47 @@
     </style>
 </head>
 <body>
+    @php
+        $isPreview = isset($reportNumber) && !isset($newReportRecord);
+        $reportHeaderName = data_get($reportHeader ?? [], 'site_name', $settings->site_name ?: config('app.name', 'Snipe-IT'));
+        $reportHeaderLines = collect([
+            data_get($adminUser, 'location.address'),
+            data_get($adminUser, 'location.address2'),
+            collect([
+                data_get($adminUser, 'location.city'),
+                data_get($adminUser, 'location.state'),
+                data_get($adminUser, 'location.zip'),
+            ])->filter()->implode(', '),
+            data_get($adminUser, 'location.country'),
+        ])->filter()->values();
+        $reportHeaderText = $reportHeaderLines->implode("\n");
+        $reportLogo = data_get($reportHeader ?? [], 'logo', $settings->logo);
+        $recipientRole = data_get($user, 'jobtitle') ?: data_get($user, 'department.name');
+        $recipientDepartment = data_get($user, 'department.name');
+        $adminDepartment = data_get($adminUser, 'department.name') ?: 'IT';
+    @endphp
 
     <table style="width: 100%; border: none; margin-bottom: 15px;">
         <tr>
             <td style="width: 120px; vertical-align: top;">
-                @if ($settings->logo)
-                    <img src="{{ asset('uploads/'.$settings->logo) }}" alt="Logo" style="width: 100px;">
+                @if ($reportLogo)
+                    <img src="{{ asset('uploads/'.$reportLogo) }}" alt="Logo" style="width: 100px;">
                 @endif
             </td>
             <td style="vertical-align: middle;">
-                <h2 style="margin: 0; font-size: 18px;">RMK Group</h2>
-                <p style="margin: 0; font-size: 11px;">
-                    Jalan Puri Kencana Blok M4 No.1 RT.002/RW.07, Kel. Kembangan Selatan,<br>
-                    Kec. Kembangan, Kota Jakarta Barat 11610
-                </p>
+                <h2 style="margin: 0; font-size: 18px;">{{ $reportHeaderName }}</h2>
+                @if ($reportHeaderText !== '')
+                    <p style="margin: 0; font-size: 11px;">
+                        {!! nl2br(e($reportHeaderText)) !!}
+                    </p>
+                @endif
             </td>
         </tr>
     </table>
     <hr style="border-top: 2px solid black; margin-bottom: 20px;">
     <div class="center-text">
         <h3>BERITA ACARA SERAH TERIMA</h3>
-<p>{{ $newReportRecord->report_number }}</p>
+<p>{{ $reportNumber ?? $newReportRecord->report_number }}</p>
     </div>
 
     <table class="header-table">
@@ -87,15 +111,15 @@
                 <table class="info-table">
                     <tr>
                         <td style="width: 120px;">Tujuan / Jabatan(Departemen)</td>
-                        <td>: {{ $adminUser->present()->fullName() }} / {{ $adminUser->department?->name ?? 'IT' }}</td>
+                        <td>: {{ $adminFullName }} / {{ $adminDepartment }}</td>
                     </tr>
                     <tr>
                         <td>NIK</td>
-                        <td>: {{ $adminUser->employee_num }}</td>
+                        <td>: {{ data_get($adminUser, 'employee_num') }}</td>
                     </tr>
                     <tr>
                         <td>Lokasi</td>
-                        <td>: {{ $adminUser->location?->name ?? '' }}</td>
+                        <td>: {{ data_get($adminUser, 'location.name', '') }}</td>
                     </tr>
                     <tr>
                         <td>Hari / Tanggal</td>
@@ -107,15 +131,15 @@
                 <table class="info-table">
                     <tr>
                         <td style="width: 120px;">Tujuan / Jabatan(Departemen)</td>
-                        <td>: {{ $user->present()->fullName() }} - {{ $user->jobtitle ?? $user->department?->name }}</td>
+                        <td>: {{ $recipientFullName }} - {{ $recipientRole }}@if($recipientDepartment) ({{ $recipientDepartment }})@endif</td>
                     </tr>
                     <tr>
                         <td>NIK</td>
-                        <td>: {{ $user->employee_num }}</td>
+                        <td>: {{ data_get($user, 'employee_num') }}</td>
                     </tr>
                     <tr>
                         <td>Lokasi</td>
-                        <td>: {{ $user->location?->name ?? '' }}</td>
+                        <td>: {{ data_get($user, 'location.name', '') }}</td>
                     </tr>
                     <tr>
                         <td>Perihal</td>
@@ -141,10 +165,10 @@
                 @foreach($assets as $key => $asset)
                 <tr>
                     <td class="center-text">{{ $key + 1 }}</td>
-                    <td>{{ $asset->name }}</td>
+                    <td>{{ data_get($asset, 'name') }}</td>
                     <td class="center-text">1</td>
-                    <td>{{ $asset->serial }}</td>
-                    <td>{{ $asset->notes }}</td>
+                    <td>{{ data_get($asset, 'serial') }}</td>
+                    <td>{{ data_get($asset, 'notes') }}</td>
                 </tr>
                 @endforeach
             @else
@@ -178,16 +202,16 @@
             </tr>
             <tr style="text-align: center;">
                 <td style="border: 1px solid black; padding: 5px;">
-                    <b>{{ $adminUser->present()->fullName() }}</b><br>
-                    <i>{{ $adminUser->jobtitle ?? 'IT Department' }}</i>
+                    <b>{{ $adminFullName }}</b><br>
+                    <i>{{ data_get($adminUser, 'jobtitle', 'IT Department') }}</i>
                 </td>
                 <td style="border: 1px solid black; padding: 5px;">
                     <b></b><br>
                     <i>Atasan Langsung YBS</i>
                 </td>
                 <td style="border: 1px solid black; padding: 5px;">
-                    <b>{{ $user->present()->fullName() }}</b><br>
-                    <i>{{ $user->jobtitle ?? '' }}</i>
+                    <b>{{ $recipientFullName }}</b><br>
+                    <i>{{ data_get($user, 'jobtitle', '') }}</i>
                 </td>
             </tr>
 
@@ -222,16 +246,16 @@
             </tr>
             <tr style="text-align: center;">
                 <td style="border: 1px solid black; padding: 5px;">
-                    <b>{{ $user->present()->fullName() }}</b><br>
-                    <i>{{ $user->jobtitle ?? '' }}</i>
+                    <b>{{ $recipientFullName }}</b><br>
+                    <i>{{ data_get($user, 'jobtitle', '') }}</i>
                 </td>
                 <td style="border: 1px solid black; padding: 5px;">
                     <b></b><br>
                     <i>HRGA</i>
                 </td>
                 <td style="border: 1px solid black; padding: 5px;">
-                    <b>{{ $adminUser->present()->fullName() }}</b><br>
-                    <i>{{ $adminUser->jobtitle ?? 'IT Department' }}</i>
+                    <b>{{ $adminFullName }}</b><br>
+                    <i>{{ data_get($adminUser, 'jobtitle', 'IT Department') }}</i>
                 </td>
             </tr>
 
@@ -246,8 +270,29 @@
     </table>
     
     <div class="no-print" style="text-align: center; margin-top: 20px;">
-        <button onclick="window.print()">Cetak Laporan</button>
+        @if (!empty($showSavedMessage))
+            <div style="margin-bottom: 12px; padding: 10px 14px; border: 1px solid #1e7e34; background: #eaf7ed; color: #1e4620; display: inline-block;">
+                BAST berhasil disimpan.
+            </div>
+            <br>
+        @endif
+        @if ($isPreview)
+            <form action="{{ route('users.bast_report.print', $user) }}" method="POST" style="display: inline;">
+                @csrf
+                <button type="submit">Cetak Laporan</button>
+            </form>
+        @else
+            <button type="button" onclick="window.print()">Cetak Laporan</button>
+        @endif
     </div>
+
+    @if (!empty($autoPrint))
+        <script>
+            window.addEventListener('load', function () {
+                window.print();
+            });
+        </script>
+    @endif
 
 </body>
 </html>
