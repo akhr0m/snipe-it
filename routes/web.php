@@ -732,8 +732,13 @@ Route::group(['middleware' => 'web'], function () {
         'logout',
         [LoginController::class, 'logout']
     )->name('logout.post');
-});
 
+    // Rute untuk menampilkan BAST dari halaman user
+    Route::get('users/{user}/bast-report', [UsersController::class, 'getBastReport'])->name('users.bast_report');
+
+    // Rute untuk mengarahkan pencarian BAST dari halaman user
+    Route::get('bast-report/find', [UsersController::class, 'findBastReport'])->name('bast.find');
+});
 
 /**
  * Health check route - skip middleware
@@ -755,11 +760,7 @@ Route::middleware(['auth'])->get(
 
 
 
-// Rute untuk menampilkan BAST dari halaman user
-Route::get('users/{user}/bast-report', [UsersController::class, 'getBastReport'])->name('users.bast_report');
 
-// Rute untuk mengarahkan pencarian BAST dari halaman user
-Route::get('bast-report/find', [UsersController::class, 'findBastReport'])->name('bast.find');
 
 
 
