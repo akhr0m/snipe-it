@@ -679,7 +679,7 @@ dir="{{ Helper::determineLanguageDirection() }}">
                                     @endcan
 
                                     @can('view', \App\Models\AssetModel::class)
-                                        <li {{!! (Request::is('models') ? ' class="active"' : '') !!}}>
+                                        <li {!! (Request::is('models') ? ' class="active"' : '') !!}>
                                             <a href="{{ route('models.index') }}">
                                                 {{ trans('general.asset_models') }}
                                             </a>
@@ -687,7 +687,7 @@ dir="{{ Helper::determineLanguageDirection() }}">
                                     @endcan
 
                                     @can('view', \App\Models\Category::class)
-                                        <li {{!! (Request::is('categories') ? ' class="active"' : '') !!}}>
+                                        <li {!! (Request::is('categories') ? ' class="active"' : '') !!}>
                                             <a href="{{ route('categories.index') }}">
                                                 {{ trans('general.categories') }}
                                             </a>
@@ -695,7 +695,7 @@ dir="{{ Helper::determineLanguageDirection() }}">
                                     @endcan
 
                                     @can('view', \App\Models\Manufacturer::class)
-                                        <li {{!! (Request::is('manufacturers') ? ' class="active"' : '') !!}}>
+                                        <li {!! (Request::is('manufacturers') ? ' class="active"' : '') !!}>
                                             <a href="{{ route('manufacturers.index') }}">
                                                 {{ trans('general.manufacturers') }}
                                             </a>
@@ -703,7 +703,7 @@ dir="{{ Helper::determineLanguageDirection() }}">
                                     @endcan
 
                                     @can('view', \App\Models\Supplier::class)
-                                        <li {{!! (Request::is('suppliers') ? ' class="active"' : '') !!}}>
+                                        <li {!! (Request::is('suppliers') ? ' class="active"' : '') !!}>
                                             <a href="{{ route('suppliers.index') }}">
                                                 {{ trans('general.suppliers') }}
                                             </a>
@@ -711,7 +711,7 @@ dir="{{ Helper::determineLanguageDirection() }}">
                                     @endcan
 
                                     @can('view', \App\Models\Department::class)
-                                        <li {{!! (Request::is('departments') ? ' class="active"' : '') !!}}>
+                                        <li {!! (Request::is('departments') ? ' class="active"' : '') !!}>
                                             <a href="{{ route('departments.index') }}">
                                                 {{ trans('general.departments') }}
                                             </a>
@@ -719,7 +719,7 @@ dir="{{ Helper::determineLanguageDirection() }}">
                                     @endcan
 
                                     @can('view', \App\Models\Location::class)
-                                        <li {{!! (Request::is('locations') ? ' class="active"' : '') !!}}>
+                                        <li {!! (Request::is('locations') ? ' class="active"' : '') !!}>
                                             <a href="{{ route('locations.index') }}">
                                                 {{ trans('general.locations') }}
                                             </a>
@@ -727,7 +727,7 @@ dir="{{ Helper::determineLanguageDirection() }}">
                                     @endcan
 
                                     @can('view', \App\Models\Company::class)
-                                        <li {{!! (Request::is('companies') ? ' class="active"' : '') !!}}>
+                                        <li {!! (Request::is('companies') ? ' class="active"' : '') !!}>
                                             <a href="{{ route('companies.index') }}">
                                                 {{ trans('general.companies') }}
                                             </a>
@@ -735,7 +735,7 @@ dir="{{ Helper::determineLanguageDirection() }}">
                                     @endcan
 
                                     @can('view', \App\Models\Depreciation::class)
-                                        <li  {{!! (Request::is('depreciations') ? ' class="active"' : '') !!}}>
+                                        <li {!! (Request::is('depreciations') ? ' class="active"' : '') !!}>
                                             <a href="{{ route('depreciations.index') }}">
                                                 {{ trans('general.depreciation') }}
                                             </a>
@@ -778,41 +778,36 @@ dir="{{ Helper::determineLanguageDirection() }}">
 
 
 
-                                    <li {{!! (Request::is('reports/activity') ? ' class="active"' : '') !!}}>
+                                    <li {!! (Request::is('reports/activity') ? ' class="active"' : '') !!}>
                                         <a href="{{ route('reports.activity') }}">
                                             {{ trans('general.activity_report') }}
                                         </a>
                                     </li>
-                                    <li {{!! (Request::is('reports/custom') ? ' class="active"' : '') !!}}>
+                                    <li {!! (Request::is('reports/custom') ? ' class="active"' : '') !!}>
                                         <a href="{{ url('reports/custom') }}">
                                             {{ trans('general.custom_report') }}
                                         </a>
                                     </li>
-                                    <li {{!! (Request::is('reports/audit') ? ' class="active"' : '') !!}}>
+                                    <li {!! (Request::is('reports/audit') ? ' class="active"' : '') !!}>
                                         <a href="{{ route('reports.audit') }}">
                                             {{ trans('general.audit_report') }}</a>
                                     </li>
-                                    <li {{!! (Request::is('reports/depreciation') ? ' class="active"' : '') !!}}>
+                                    <li {!! (Request::is('reports/depreciation') ? ' class="active"' : '') !!}>
                                         <a href="{{ url('reports/depreciation') }}">
                                             {{ trans('general.depreciation_report') }}
                                         </a>
                                     </li>
-                                    <li {{!! (Request::is('reports/licenses') ? ' class="active"' : '') !!}}>
+                                    <li {!! (Request::is('reports/licenses') ? ' class="active"' : '') !!}>
                                         <a href="{{ url('reports/licenses') }}">
                                             {{ trans('general.license_report') }}
                                         </a>
                                     </li>
-                                    <li {{!! (Request::is('reports/asset_maintenances') ? ' class="active"' : '') !!}}>
+                                    <li {!! (Request::is('reports/asset_maintenances') ? ' class="active"' : '') !!}>
                                         <a href="{{ url('reports/asset_maintenances') }}">
                                             {{ trans('general.asset_maintenance_report') }}
                                         </a>
                                     </li>
-                                    <li {{!! (Request::is('reports/unaccepted_assets') ? ' class="active"' : '') !!}}>
-                                        <a href="{{ url('reports/unaccepted_assets') }}">
-                                            {{ trans('general.unaccepted_asset_report') }}
-                                        </a>
-                                    </li>
-                                    <li  {{!! (Request::is('reports/accessories') ? ' class="active"' : '') !!}}>
+                                    <li  {!! (Request::is('reports/accessories') ? ' class="active"' : '') !!}>
                                         <a href="{{ url('reports/accessories') }}">
                                             {{ trans('general.accessory_report') }}
                                         </a>
