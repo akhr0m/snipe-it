@@ -110,7 +110,7 @@
             <td style="width: 50%; vertical-align: top;">
                 <table class="info-table">
                     <tr>
-                        <td style="width: 120px;">Nama / Jabatan</td>
+                        <td style="width: 120px;">Nama / Departemen</td>
                         <td>: {{ $adminFullName }} / {{ $adminDepartment }}</td>
                     </tr>
                     <tr>
