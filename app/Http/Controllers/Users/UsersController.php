@@ -883,19 +883,17 @@ class UsersController extends Controller
         ));
     }
 
-    private function createBastReportRecord(User $user, User $adminUser, Carbon $date, ?Setting $settings): UserReport
+   private function createBastReportRecord(User $user, User $adminUser, Carbon $date, ?Setting $settings)
     {
         $assetsSnapshot = $user->assets()->get()->map(function ($asset) {
             return [
                 'asset_tag' => $asset->asset_tag,
                 'name' => $asset->name,
                 'serial' => $asset->serial,
-                'notes' => $asset->notes,
             ];
         })->values()->all();
 
         return UserReport::create([
-            'user_id' => $user->id,
             'recipient_id' => $user->id,
             'giver_id' => $adminUser->id,
             'recipient_snapshot' => $this->makeBastUserSnapshot($user),
