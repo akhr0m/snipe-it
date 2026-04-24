@@ -90,12 +90,11 @@
                 @endif
             </td>
             <td style="vertical-align: middle;">
-                <h2 style="margin: 0; font-size: 18px;">{{ $reportHeaderName }}</h2>
-                @if ($reportHeaderText !== '')
+                <h2 style="margin: 0; font-size: 18px;">RMK Group</h2>
                     <p style="margin: 0; font-size: 11px;">
-                        {!! nl2br(e($reportHeaderText)) !!}
+			Jalan Puri Kencana Blok M4 No.1 RT.002/RW.07, Kel. Kembangan Selatan,<br>
+			Kec. Kembangan, Kota Jakarta Barat 11610
                     </p>
-                @endif
             </td>
         </tr>
     </table>
