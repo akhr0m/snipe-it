@@ -1,0 +1,14 @@
+{
+  "name": "snipe-it/bast-module",
+  "description": "BAST (Berita Acara Serah Terima) Report Module for Snipe-IT",
+  "type": "library",
+  "autoload": {
+    "psr-4": {
+      "BastModule\\": "src/"
+    }
+  },
+  "require": {
+    "php": ">=8.1",
+    "illuminate/support": "^10.0|^11.0"
+  }
+}
