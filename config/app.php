@@ -317,6 +317,7 @@ return [
         App\Providers\MacroServiceProvider::class,
         App\Providers\SamlServiceProvider::class,
         App\Providers\BreadcrumbsServiceProvider::class,
+        BastModule\Providers\BastModuleServiceProvider::class,
 
     ],
 

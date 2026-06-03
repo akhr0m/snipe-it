@@ -6,7 +6,7 @@ use App\Models\Department;
 use App\Models\Asset;
 use App\Models\Location;
 use App\Models\User;
-use App\Models\UserReport;
+use BastModule\Models\UserReport;
 use Carbon\Carbon;
 use Tests\TestCase;
 

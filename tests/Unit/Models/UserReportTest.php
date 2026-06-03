@@ -3,7 +3,7 @@
 namespace Tests\Unit\Models;
 
 use App\Models\User;
-use App\Models\UserReport;
+use BastModule\Models\UserReport;
 use Carbon\Carbon;
 use Tests\TestCase;
 

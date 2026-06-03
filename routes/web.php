@@ -92,24 +92,7 @@ Route::group(['middleware' => 'auth'], function () {
      */
     Route::resource('departments', DepartmentsController::class);
 
-    // KODE BARU (BENAR)
-    Route::get('users/{user}/bast-report', [UsersController::class, 'getBastReport'])->name('users.bast_report');
-    Route::post('users/{user}/bast-report/print', [UsersController::class, 'storeAndPrintBastReport'])->name('users.bast_report.print');
 
-    // Rute untuk memproses pencarian BAST dari form
-    Route::get('bast-report/find', [\App\Http\Controllers\Users\UsersController::class, 'findBastReport'])->name('bast.find');
-
-    //Untuk menampilkan halaman pencarian
-    Route::get('bast-report/search', [UsersController::class, 'showBastSearchPage'])->name('bast.search');
-
-    //checkBastExists
-    Route::get('bast-report/check', [UsersController::class, 'checkBastExists'])->name('bast.check');
-
-    //untuk menampilkan data BAST berdasarkan ID pada menu bast report search
-    Route::get('/bast-report/view/{id}', [\App\Http\Controllers\Users\UsersController::class, 'viewBastReportById']);
-
-    // Suplai data BAST 
-    Route::get('/bast-report/api-data', [\App\Http\Controllers\Users\UsersController::class, 'getBastDataApi'])->name('bast.api.data');
 });
 
 /*
@@ -733,11 +716,6 @@ Route::group(['middleware' => 'web'], function () {
         [LoginController::class, 'logout']
     )->name('logout.post');
 
-    // Rute untuk menampilkan BAST dari halaman user
-    Route::get('users/{user}/bast-report', [UsersController::class, 'getBastReport'])->name('users.bast_report');
-
-    // Rute untuk mengarahkan pencarian BAST dari halaman user
-    Route::get('bast-report/find', [UsersController::class, 'findBastReport'])->name('bast.find');
 });
 
 /**

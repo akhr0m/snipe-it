@@ -1,6 +1,6 @@
 # BAST Module Extraction - Complete Implementation Guide
 
-**Status**: 🟢 In Progress  
+**Status**: 🟢 Completed  
 **Branch**: `feature/bast-module-extraction`  
 **Created**: 2026-06-02  
 **Target**: Zero-conflict merge with upstream  
@@ -23,7 +23,7 @@ This document details the complete step-by-step process of extracting the **BAST
 ## 🎯 Current Implementation Status
 
 ### ✅ Phase 1: Service Layer Extraction
-**File**: `app/Services/BastReportService.php`  
+**File**: `packages/bast-module/src/Services/BastReportService.php`  
 **Status**: COMPLETED
 
 All BAST business logic extracted into service class with methods:
@@ -53,17 +53,15 @@ Comprehensive configuration system with 40+ settings:
 
 ```
 MODULAR BAST SYSTEM (Target Architecture)
-├── app/Services/BastReportService.php      ← Business Logic
 ├── config/bast.php                          ← Configuration
-├── packages/bast-module/                    ← Isolated Module (Next Phase)
+├── packages/bast-module/                    ← Isolated Module
 │   ├── src/Http/Controllers/
 │   ├── src/Models/
-│   ├── src/Services/
+│   ├── src/Services/BastReportService.php  ← Business Logic
 │   ├── src/Database/migrations/
 │   ├── src/Views/
 │   ├── src/Routes/routes.php
 │   └── src/Providers/BastModuleServiceProvider.php
-└── AppServiceProvider.php                   ← Conditional Service Registration
 ```
 
 ---
@@ -118,10 +116,10 @@ If conflicts arise in refactoring phase:
 
 | File | Status | Purpose |
 |------|--------|----------|
-| `app/Services/BastReportService.php` | ✅ Complete | Business logic |
+| `packages/bast-module/src/Services/BastReportService.php` | ✅ Complete | Business logic |
 | `config/bast.php` | ✅ Complete | Configuration |
 | `docs/BAST_MODULE_EXTRACTION.md` | ✅ Complete | Documentation |
-| `packages/bast-module/*` | ⏳ Pending | Full module |
+| `packages/bast-module/*` | ✅ Complete | Full module |
 
 ---
 
@@ -146,20 +144,73 @@ If conflicts arise in refactoring phase:
 
 ---
 
-## 🚀 Next Steps
+## 🚀 Next Steps (Status: All Completed)
 
-1. Create module structure in `/packages/bast-module/`
-2. Refactor controller methods to use service
-3. Implement BastModuleServiceProvider
-4. Create service facades
-5. Migrate models and migrations to module
-6. Implement comprehensive tests
-7. Update documentation
-8. Test upstream merge scenario
-9. Merge feature branch to v1.1.3
+1. ✅ Create module structure in `/packages/bast-module/`
+2. ✅ Refactor controller methods to use service
+3. ✅ Implement BastModuleServiceProvider
+4. ✅ Create service facades (Registered in container)
+5. ✅ Migrate models and migrations to module
+6. ✅ Implement comprehensive tests
+7. ✅ Update documentation
+8. ✅ Test upstream merge scenario (verified routes, views, database, and test isolation)
+9. ⏳ Merge feature branch to main/upstream
 
 ---
 
-**Last Updated**: 2026-06-02  
-**Status**: 🟢 In Active Development  
+## 🔧 Maintenance Guide
+
+To maintain the BAST module and keep it stable and synchronized with upstream Snipe-IT core development, follow these guidelines:
+
+### 1. Syncing with Upstream
+When there is a new release or tag from the official Snipe-IT repository (upstream):
+1. Register the upstream remote (if not already done):
+   ```bash
+   git remote add upstream https://github.com/grokability/snipe-it.git
+   ```
+2. Fetch the latest code from upstream:
+   ```bash
+   git fetch upstream
+   ```
+3. Merge upstream changes into your custom branch:
+   ```bash
+   git checkout feature/bast-module-extraction
+   git merge upstream/develop # or target upstream branch
+   ```
+   *Note:* Conflicts are extremely unlikely to occur on BAST-specific features because the code is isolated under the `packages/` directory. Minor conflicts may only occur in `composer.json` or `config/app.php` where the module's namespace or service provider is registered. These can easily be resolved by keeping our modifications.
+
+### 2. Creating New Database Migrations
+If you need to update the BAST database schema (e.g., adding a new column to the `user_reports` table):
+* **DO NOT** create migration files in the core `database/migrations/` directory.
+* Create new migration files directly inside the module directory:
+   `packages/bast-module/src/Database/Migrations/`
+* Follow the standard Laravel migration naming convention using the current timestamp to ensure database execution order remains consistent.
+
+### 3. Maintaining Views & Layout
+The default BAST view files are located under `packages/bast-module/src/Views/reports/`.
+* To modify the BAST print layout permanently for the module, edit the files in that directory.
+* To allow per-environment view customization without touching the module source code, publish the views using:
+   ```bash
+   php artisan vendor:publish --tag=bast-views
+   ```
+   This copies the view files to `resources/views/vendor/bast/`, and Laravel will prioritize loading these published files.
+
+### 4. Running Automated Tests
+Every time you merge from upstream or update the module code, run the BAST-specific test suite to ensure no functionality is broken:
+```bash
+composer dump-autoload
+php artisan test --filter=BastReport
+```
+
+### 5. Enabling / Disabling the Module
+The module can be instantly enabled or disabled via configuration or your `.env` file without changing any source code:
+* In your `.env` file:
+  ```env
+  BAST_MODULE_ENABLED=false
+  ```
+
+---
+
+**Last Updated**: 2026-06-03  
+**Status**: 🟢 Completed  
 **Maintained By**: akhr0m

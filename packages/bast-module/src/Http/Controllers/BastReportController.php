@@ -4,7 +4,7 @@ namespace BastModule\Http\Controllers;
 
 use App\Http\Controllers\Controller;
 use App\Models\User;
-use App\Services\BastReportService;
+use BastModule\Services\BastReportService;
 use Illuminate\Http\Request;
 
 class BastReportController extends Controller

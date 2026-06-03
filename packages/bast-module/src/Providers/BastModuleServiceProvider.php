@@ -12,8 +12,8 @@ class BastModuleServiceProvider extends ServiceProvider
         $this->mergeConfigFrom(__DIR__ . '/../config/bast.php', 'bast');
 
         // Bind the App service for BAST if needed (we use the app service implementation)
-        $this->app->singleton(\App\Services\BastReportService::class, function ($app) {
-            return new \App\Services\BastReportService();
+        $this->app->singleton(\BastModule\Services\BastReportService::class, function ($app) {
+            return new \BastModule\Services\BastReportService();
         });
     }
 

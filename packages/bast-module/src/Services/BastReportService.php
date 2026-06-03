@@ -1,10 +1,10 @@
 <?php
 
-namespace App\Services;
+namespace BastModule\Services;
 
 use App\Models\Setting;
 use App\Models\User;
-use App\Models\UserReport;
+use BastModule\Models\UserReport;
 use Carbon\Carbon;
 
 /**

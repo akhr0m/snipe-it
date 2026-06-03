@@ -762,9 +762,11 @@ dir="{{ Helper::determineLanguageDirection() }}">
 
 
 
+        @if(config('bast.enabled', true))
         <li{{ (Request::is('bast-report/search') ? ' class="active"' : '') }}>
             <a href="{{ route('bast.search') }}">Find BAST</a>
         </li>
+        @endif
 
 
 

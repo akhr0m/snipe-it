@@ -191,6 +191,7 @@
               @endcan
 
                 @can('view', $user)
+                @if(config('bast.enabled', true))
                 <div class="col-md-12" style="padding-top: 5px;">
 
                 @if($user->allAssignedCount() != '0') 
@@ -204,6 +205,7 @@
                       Preview BAST</button>
                 @endif
                 </div>
+                @endif
                 @endcan
 
                 @can('view', $user)
