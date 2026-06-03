@@ -9,14 +9,14 @@ use Tests\TestCase;
 
 class LocationsForSelectListTest extends TestCase
 {
-    public function testGettingLocationListRequiresProperPermission()
+    public function test_getting_location_list_requires_proper_permission()
     {
         $this->actingAsForApi(User::factory()->create())
             ->getJson(route('api.locations.selectlist'))
             ->assertForbidden();
     }
 
-    public function testLocationsReturned()
+    public function test_locations_returned()
     {
         Location::factory()->create();
 
@@ -32,10 +32,23 @@ class LocationsForSelectListTest extends TestCase
                 'page',
                 'page_count',
             ])
-            ->assertJson(fn(AssertableJson $json) => $json->has('results', 1)->etc());
+            ->assertJson(fn (AssertableJson $json) => $json->has('results', 1)->etc());
     }
 
-    public function testLocationsAreReturnedWhenUserIsUpdatingTheirProfileAndHasPermissionToUpdateLocation()
+    public function test_location_is_excluded_from_selectlist_when_exclude_id_matches()
+    {
+        [$locationA, $locationB] = Location::factory()->count(2)->create();
+
+        $this->actingAsForApi(User::factory()->createUsers()->create())
+            ->getJson(route('api.locations.selectlist', ['excludeId' => $locationA->id]))
+            ->assertOk()
+            ->assertJson(fn (AssertableJson $json) => $json->where('results', fn ($results) => collect($results)->doesntContain('id', $locationA->id) &&
+                    collect($results)->contains('id', $locationB->id)
+            )->etc()
+            );
+    }
+
+    public function test_locations_are_returned_when_user_is_updating_their_profile_and_has_permission_to_update_location()
     {
         $this->actingAsForApi(User::factory()->canEditOwnLocation()->create())
             ->withHeader('referer', route('profile'))

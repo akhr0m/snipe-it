@@ -1,5 +1,5 @@
 @component('mail::message')
-# {{ trans('mail.hello') }} {{ $target->present()->fullName() }},
+# {{ trans('mail.hello') }} {{ $target->display_name }},
 
 {{ trans('mail.the_following_item') }}
 
@@ -37,13 +37,15 @@
 @if (isset($status))
 | **{{ trans('general.status') }}** | {{ $status }} |
 @endif
-@foreach($fields as $field)
-@if (($item->{ $field->db_column_name() }!='') && ($field->show_in_email) && ($field->field_encrypted=='0'))
-| **{{ $field->name }}** | {{ $item->{ $field->db_column_name() } }} |
+@if (!empty($custom_fields))
+@foreach($custom_fields as $customField)
+@if (!empty($customField['label']) && array_key_exists('value', $customField) && $customField['value'] !== '')
+| **{{ $customField['label'] }}** | {{ $customField['value'] }} |
 @endif
 @endforeach
+@endif
 @if ($admin)
-| **{{ trans('general.administrator') }}** | {{ $admin->present()->fullName() }} |
+| **{{ trans('general.administrator') }}** | {{ $admin->display_name }} |
 @endif
 @if ($note)
 | **{{ trans('mail.additional_notes') }}** | {{ $note }} |

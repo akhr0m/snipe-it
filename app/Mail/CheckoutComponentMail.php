@@ -6,13 +6,13 @@ use App\Models\Component;
 use App\Models\Setting;
 use App\Models\User;
 use Illuminate\Bus\Queueable;
-use Illuminate\Mail\Mailable;
 use Illuminate\Mail\Mailables\Address;
+use Illuminate\Mail\Mailables\Attachment;
 use Illuminate\Mail\Mailables\Content;
 use Illuminate\Mail\Mailables\Envelope;
 use Illuminate\Queue\SerializesModels;
 
-class CheckoutComponentMail extends Mailable
+class CheckoutComponentMail extends BaseMailable
 {
     use Queueable, SerializesModels;
 
@@ -26,7 +26,7 @@ class CheckoutComponentMail extends Mailable
         $this->note = $note;
         $this->target = $checkedOutTo;
         $this->acceptance = $acceptance;
-        $this->qty = $component->assets->first()?->pivot?->assigned_qty;
+        $this->qty = $component->checkout_qty;
 
         $this->settings = Setting::getSettings();
     }
@@ -57,15 +57,15 @@ class CheckoutComponentMail extends Mailable
 
         return new Content(
             markdown: 'mail.markdown.checkout-component',
-            with:   [
-                'item'          => $this->item,
-                'admin'         => $this->admin,
-                'note'          => $this->note,
-                'target'        => $this->target,
-                'eula'          => $eula,
-                'req_accept'    => $req_accept,
-                'accept_url'    => $accept_url,
-                'qty'           => $this->qty,
+            with: [
+                'item' => $this->item,
+                'admin' => $this->admin,
+                'note' => $this->note,
+                'target' => $this->target,
+                'eula' => $eula,
+                'req_accept' => $req_accept,
+                'accept_url' => $accept_url,
+                'qty' => $this->qty,
             ]
         );
     }
@@ -73,7 +73,7 @@ class CheckoutComponentMail extends Mailable
     /**
      * Get the attachments for the message.
      *
-     * @return array<int, \Illuminate\Mail\Mailables\Attachment>
+     * @return array<int, Attachment>
      */
     public function attachments(): array
     {

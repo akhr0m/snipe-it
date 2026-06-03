@@ -81,30 +81,7 @@ mix
       "./public/js/dist/all.js"
   ).sourceMaps(true, 'source-map', 'source-map').version();
 
-var skins = fs.readdirSync("resources/assets/less/skins");
 
-// Convert the skins to CSS
-for (var i in skins) {
-    mix.less(
-        "resources/assets/less/skins/" + skins[i],
-        "css/dist/skins"
-    )
-}
-
-var css_skins = fs.readdirSync("public/css/dist/skins");
-for (var i in css_skins) {
-    if (css_skins[i].endsWith(".min.css")) {
-        //don't minify already minified skinns
-        continue;
-    }
-    if (css_skins[i].endsWith(".css")) {
-        // only minify files ending with '.css'
-        mix.minify("public/css/dist/skins/" + css_skins[i]).version();
-    }
-    //TODO - if we only ever use the minified versions, this could be simplified down to one line (above)
-    // but it stays like this so we have the minified and non-minified versions of the skins
-    // right now the code seems to use the un-minified skins
-}
 
 /**
  * Combine bootstrap table css
@@ -114,6 +91,7 @@ mix
     [
       "./node_modules/bootstrap-table/dist/bootstrap-table.css",
       "./node_modules/bootstrap-table/dist/extensions/sticky-header/bootstrap-table-sticky-header.css",
+      "./node_modules/bootstrap-table/dist/extensions/fixed-columns/bootstrap-table-fixed-columns.css",
      "./resources/assets/css/dragtable.css",
     ],
     "public/css/dist/bootstrap-table.css"
@@ -132,8 +110,10 @@ mix
             './node_modules/bootstrap-table/dist/extensions/export/bootstrap-table-export.js',
             './node_modules/bootstrap-table/dist/extensions/cookie/bootstrap-table-cookie.js',
             './node_modules/bootstrap-table/dist/extensions/sticky-header/bootstrap-table-sticky-header.js',
+            './node_modules/bootstrap-table/dist/extensions/fixed-columns/bootstrap-table-fixed-columns.min.js',
             './node_modules/bootstrap-table/dist/extensions/addrbar/bootstrap-table-addrbar.js',
             './node_modules/bootstrap-table/dist/extensions/print/bootstrap-table-print.min.js',
+            './node_modules/bootstrap-table/dist/extensions/custom-view/bootstrap-table-custom-view.js',
             './resources/assets/js/extensions/jquery.base64.js',
             './node_modules/tableexport.jquery.plugin/tableExport.min.js',
             './node_modules/tableexport.jquery.plugin/libs/jsPDF/jspdf.umd.min.js',

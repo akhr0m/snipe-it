@@ -1,6 +1,6 @@
 <?php
 
-return array(
+return [
     'personal_api_keys' => 'Personal API Keys',
     'personal_access_token' => 'Personal Access Token',
     'personal_api_keys_success' => 'Personal API Key :key created sucessfully',
@@ -11,7 +11,7 @@ return array(
     'api_token_expiration_time' => 'API tokens are set to expire in:',
     'api_reference' => 'Za iskanje specifičnih končnih točk API-ja in dodatne dokumentacije API-ja preverite <a href="https://snipe-it.readme.io/reference" target="_blank">API reference</a>.',
     'profile_updated' => 'Račun je bil uspešno posodobljen',
-    'no_tokens' => 'You have not created any personal access tokens.',
+    'no_tokens' => 'Niste ustvarili nobenih osebnih žetonov za dostop.',
     'enable_sounds' => 'Omogoči zvočne učinke',
     'enable_confetti' => 'Enable confetti effects',
-);
+];

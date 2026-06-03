@@ -2,10 +2,10 @@
 
 namespace App\Importer;
 
+use App\Events\CheckoutableCheckedIn;
 use App\Models\Asset;
 use App\Models\Statuslabel;
 use App\Models\User;
-use App\Events\CheckoutableCheckedIn;
 use Illuminate\Support\Facades\Crypt;
 
 class AssetImporter extends ItemImporter
@@ -18,7 +18,7 @@ class AssetImporter extends ItemImporter
 
         $this->defaultStatusLabelId = Statuslabel::first()?->id;
 
-        if (!is_null(Statuslabel::deployable()->first())) {
+        if (! is_null(Statuslabel::deployable()->first())) {
             $this->defaultStatusLabelId = Statuslabel::deployable()->first()?->id;
         }
 
@@ -44,7 +44,7 @@ class AssetImporter extends ItemImporter
             foreach ($this->customFields as $customField) {
                 $customFieldValue = $this->array_smart_custom_field_fetch($row, $customField);
 
-                if ($customFieldValue) {
+                if (! is_null($customFieldValue)) {
                     if ($customField->field_encrypted == 1) {
                         $this->item['custom_fields'][$customField->db_column_name()] = Crypt::encrypt($customFieldValue);
                         $this->log('Custom Field '.$customField->name.': '.Crypt::encrypt($customFieldValue));
@@ -59,7 +59,6 @@ class AssetImporter extends ItemImporter
             }
         }
 
-
         $this->createAssetIfNotExists($row);
     }
 
@@ -67,8 +66,9 @@ class AssetImporter extends ItemImporter
      * Create the asset if it does not exist.
      *
      * @author Daniel Melzter
+     *
      * @since 3.0
-     * @param array $row
+     *
      * @return Asset|mixed|null
      */
     public function createAssetIfNotExists(array $row)
@@ -76,25 +76,24 @@ class AssetImporter extends ItemImporter
         $editingAsset = false;
         $asset_tag = $this->findCsvMatch($row, 'asset_tag');
 
-        if (empty($asset_tag)){
+        if (empty($asset_tag)) {
             $asset_tag = Asset::autoincrement_asset();
         }
 
-
-
-        if ($this->findCsvMatch($row, 'id')!='') {
+        if ($this->findCsvMatch($row, 'id') != '') {
             // Override asset if an ID was given
             \Log::debug('Finding asset by ID: '.$this->findCsvMatch($row, 'id'));
-            $asset = Asset::find($this->findCsvMatch($row, 'id'));
+            $asset = Asset::with('assignedTo')->find($this->findCsvMatch($row, 'id'));
         } else {
-            $asset = Asset::where(['asset_tag'=> (string) $asset_tag])->first();
+            $asset = Asset::with('assignedTo')->where(['asset_tag' => (string) $asset_tag])->first();
         }
-        
+
         if ($asset) {
             if (! $this->updating) {
                 $exists_error = trans('general.import_asset_tag_exists', ['asset_tag' => $asset_tag]);
                 $this->log($exists_error);
                 $this->addErrorToBag($asset, 'asset_tag', $exists_error);
+
                 return $exists_error;
             }
 
@@ -141,12 +140,11 @@ class AssetImporter extends ItemImporter
             $item['rtd_location_id'] = $this->item['location_id'];
         }
 
-
         /**
          * We use this to backdate the checkin action further down
          */
         $checkin_date = date('Y-m-d H:i:s');
-        if ($this->item['last_checkin']!='') {
+        if ($this->item['last_checkin'] != '') {
             $item['last_checkin'] = $this->parseOrNullDate('last_checkin', 'datetime');
             $checkout_date = $this->item['last_checkin'];
         }
@@ -155,65 +153,82 @@ class AssetImporter extends ItemImporter
          * We use this to backdate the checkout action further down
          */
         $checkout_date = date('Y-m-d H:i:s');
-        if ($this->item['last_checkout']!='') {
+        if ($this->item['last_checkout'] != '') {
             $item['last_checkout'] = $this->parseOrNullDate('last_checkout', 'datetime');
             $checkout_date = $this->item['last_checkout'];
         }
 
-        if ($this->item['expected_checkin']!='') {
+        if ($this->item['expected_checkin'] != '') {
             $item['expected_checkin'] = $this->parseOrNullDate('expected_checkin');
         }
 
-        if ($this->item['last_audit_date']!='') {
+        if ($this->item['last_audit_date'] != '') {
             $item['last_audit_date'] = $this->parseOrNullDate('last_audit_date');
         }
 
-        if ($this->item['next_audit_date']!='') {
+        if ($this->item['next_audit_date'] != '') {
             $item['next_audit_date'] = $this->parseOrNullDate('next_audit_date');
         }
 
-        if ($this->item['asset_eol_date']!='') {
+        if ($this->item['asset_eol_date'] != '') {
             $item['asset_eol_date'] = $this->parseOrNullDate('asset_eol_date');
         }
 
-
         if ($editingAsset) {
             $asset->update($item);
+            $asset->setImported(true);
         } else {
             $asset->fill($item);
+            $asset->setImported(true);
         }
 
         // If we're updating, we don't want to overwrite old fields.
+        // Apply custom fields to asset attributes if they exist
+        $customFieldsToSave = [];
         if (array_key_exists('custom_fields', $this->item)) {
             foreach ($this->item['custom_fields'] as $custom_field => $val) {
                 $asset->{$custom_field} = $val;
+                $customFieldsToSave[$custom_field] = $val;
             }
         }
 
-        // This sets an attribute on the Loggable trait for the action log
-        $asset->setImported(true);
+        // For existing assets that have custom fields, update them.
+        // This avoids the issue of calling save() twice with Model::unguard() active.
+        if ($editingAsset && ! empty($customFieldsToSave)) {
+            $asset->update($customFieldsToSave);
+            $success = true;
+        } elseif (! $editingAsset) {
+            // For new assets, save with all changes (custom fields included via direct attribute assignment above)
+            $success = $asset->save();
+        } else {
+            // For existing assets without custom fields, update() already saved everything
+            $success = true;
+        }
 
-        if ($asset->save()) {
+        if ($success) {
 
-            $this->log('Asset '.$this->item['name'].' with serial number '.$this->item['serial'].' was created');
+            $this->log('Asset '.$this->item['name'].' with serial number '.$this->item['serial'].' created or updated');
 
             // If we have a target to checkout to, lets do so.
-            //-- created_by is a property of the abstract class Importer, which this class inherits from and it's set by
-            //-- the class that needs to use it (command importer or GUI importer inside the project).
+            // -- created_by is a property of the abstract class Importer, which this class inherits from and it's set by
+            // -- the class that needs to use it (command importer or GUI importer inside the project).
             if (isset($target) && ($target !== false)) {
-                if (!is_null($asset->assigned_to)){
-                    if ($asset->assigned_to != $target->id) {
-                        event(new CheckoutableCheckedIn($asset, User::find($asset->assigned_to), auth()->user(), 'Checkin from CSV Importer', $checkin_date));
-                    }
-                }
+                $asset = $asset->fresh();
+                $targetType = get_class($target);
+                $alreadyCheckedOutToTarget = ($asset->assigned_to == $target->id) && ($asset->assigned_type === $targetType);
 
-                $asset->fresh()->checkOut($target, $this->created_by, $checkout_date, null, 'Checkout from CSV Importer',  $asset->name);
+                // Skip duplicate checkout noise when update mode keeps the same assignment target.
+                if (! $alreadyCheckedOutToTarget) {
+                    if (! is_null($asset->assigned_to)) {
+                        event(new CheckoutableCheckedIn($asset, $asset->assigned, auth()->user(), 'Checkin from CSV Importer', $checkin_date));
+                    }
+
+                    $asset->checkOut($target, $this->created_by, $checkout_date, null, 'Checkout from CSV Importer', $asset->name);
+                }
             }
 
             return;
         }
         $this->logError($asset, 'Asset "'.$this->item['name'].'"');
     }
-
-
 }

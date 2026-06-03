@@ -1,5 +1,6 @@
 @push('css')
     <link rel="stylesheet" href="{{ url(mix('css/dist/bootstrap-table.css')) }}">
+
 @endpush
 
 @push('js')
@@ -13,6 +14,425 @@
 <script nonce="{{ csrf_token() }}">
     $(function () {
 
+        if (!$.fn.bootstrapTable || $.fn.bootstrapTable.__snipeAdvancedSearchPatched) {
+            return;
+        }
+
+        $.fn.bootstrapTable.__snipeAdvancedSearchPatched = true;
+
+        var BootstrapTable = $.BootstrapTable;
+        var baseBootstrapTablePrototype = Object.getPrototypeOf(BootstrapTable.prototype);
+        var baseInitSearch = baseBootstrapTablePrototype.initSearch;
+        var defaultAdvancedSearchOperator = 'and';
+        var advancedSearchSearchText = @json(trans('general.search'));
+
+        var advancedSearchOperatorLabel = @json(trans('general.search_operator'));
+        var advancedSearchAndText = @json(trans('general.and'));
+        var advancedSearchOrText = @json(trans('general.or'));
+        var advancedSearchOperatorStorageKey = 'snipeit.bs.table.advancedSearchOperator';
+
+        var normalizeAdvancedSearchOperator = function (operator) {
+            return (operator || defaultAdvancedSearchOperator).toString().toLowerCase() === 'or' ? 'or' : 'and';
+        };
+
+        var getStoredAdvancedSearchOperator = function () {
+            try {
+                var storedOperator = localStorage.getItem(advancedSearchOperatorStorageKey);
+
+                return storedOperator ? normalizeAdvancedSearchOperator(storedOperator) : null;
+            } catch (error) {
+                return null;
+            }
+        };
+
+        var storeAdvancedSearchOperator = function (operator) {
+            try {
+                localStorage.setItem(advancedSearchOperatorStorageKey, normalizeAdvancedSearchOperator(operator));
+            } catch (error) {
+                // Ignore storage errors (private mode/quota), fallback remains in-memory.
+            }
+        };
+
+            var escapeAdvancedSearchValue = function (value) {
+                return $('<div/>').text(value == null ? '' : value).html();
+            };
+
+            Object.assign($.fn.bootstrapTable.locales, {
+                formatAdvancedCloseButton: function () {
+                    return advancedSearchSearchText;
+                },
+                formatAdvancedCancelButton: function () {
+                    return $.fn.bootstrapTable.defaults.formatClearSearch();
+                },
+                formatAdvancedSearchOperator: function () {
+                    return advancedSearchOperatorLabel;
+                }
+            });
+
+            Object.assign($.fn.bootstrapTable.defaults, {
+                advancedSearchOperator: defaultAdvancedSearchOperator,
+                formatAdvancedCloseButton: $.fn.bootstrapTable.locales.formatAdvancedCloseButton,
+                formatAdvancedCancelButton: $.fn.bootstrapTable.locales.formatAdvancedCancelButton,
+                formatAdvancedSearchOperator: $.fn.bootstrapTable.locales.formatAdvancedSearchOperator
+            });
+
+            BootstrapTable.prototype.getAdvancedSearchOperator = function () {
+                var operator = this.advancedSearchOperator || this.options.advancedSearchOperator || this.$el.data('advanced-search-filter-operator') || getStoredAdvancedSearchOperator() || defaultAdvancedSearchOperator;
+
+                return normalizeAdvancedSearchOperator(operator);
+            };
+
+            BootstrapTable.prototype.setAdvancedSearchOperator = function (operator) {
+                this.advancedSearchOperator = normalizeAdvancedSearchOperator(operator);
+                this.$el.data('advanced-search-filter-operator', this.advancedSearchOperator);
+                storeAdvancedSearchOperator(this.advancedSearchOperator);
+            };
+
+            BootstrapTable.prototype.collectAdvancedSearchFormData = function () {
+                var filters = {};
+                var operator = defaultAdvancedSearchOperator;
+
+                $.each(this.$toolbarModal.find('.toolbar-model-form').serializeArray(), function (index, field) {
+                    var value = $.trim(field.value);
+
+                    if (field.name === '__advanced_search_operator') {
+                        operator = value.toLowerCase() === 'or' ? 'or' : 'and';
+
+                        return;
+                    }
+
+                    if (value !== '') {
+                        filters[field.name] = value;
+                    }
+                });
+
+                return {
+                    filters: filters,
+                    operator: operator
+                };
+            };
+
+            BootstrapTable.prototype.getAdvancedSearchFieldTitle = function (fieldName) {
+                for (var i = 0; i < this.columns.length; i++) {
+                    var column = this.columns[i];
+
+                    if (column.field === fieldName) {
+                        return $('<div/>').html(column.title || fieldName).text().trim();
+                    }
+                }
+
+                return fieldName;
+            };
+
+            BootstrapTable.prototype.getAdvancedSearchTagsContainer = function () {
+                var $tableWrapper = this.$el.closest('.bootstrap-table');
+
+                if (!$tableWrapper.length) {
+                    return $();
+                }
+
+                var $container = $tableWrapper.children('.snipe-advanced-search-tags');
+
+                if (!$container.length) {
+                    $container = $('<div class="snipe-advanced-search-tags" style="margin: 8px 0;"></div>');
+
+                    if ($tableWrapper.children('.fixed-table-container').length) {
+                        $container.insertBefore($tableWrapper.children('.fixed-table-container').first());
+                    } else {
+                        $container.insertBefore(this.$el);
+                    }
+                }
+
+                return $container;
+            };
+
+            BootstrapTable.prototype.getAdvancedSearchButton = function () {
+                var $tableWrapper = this.$el.closest('.bootstrap-table');
+
+                if (!$tableWrapper.length) {
+                    return $();
+                }
+
+                // Try to find the button by data attribute first (most reliable)
+                var $button = $tableWrapper.find('button[data-toggle="advanced-search"]').first();
+
+                // Fallback: look in toolbar by the fa-search-plus icon
+                if (!$button.length) {
+                    $button = $tableWrapper.find('button:has(.fa-search-plus)').first();
+                }
+
+                return $button;
+            };
+
+            BootstrapTable.prototype.updateAdvancedSearchButtonState = function () {
+                var hasFilters = !$.isEmptyObject(this.filterColumnsPartial);
+                var $button = this.getAdvancedSearchButton();
+
+                if ($button.length) {
+                    $button.toggleClass('active', hasFilters);
+                }
+            };
+
+            BootstrapTable.prototype.renderAdvancedSearchTags = function () {
+                var _this = this;
+                var filters = this.filterColumnsPartial;
+                var $tagContainer = this.getAdvancedSearchTagsContainer();
+
+                if ($.isEmptyObject(filters)) {
+                    $tagContainer.empty();
+                    this.updateAdvancedSearchButtonState();
+                    return;
+                }
+
+                var colMap = {};
+                this.columns.forEach(c => colMap[c.field] = c.title);
+                var op = this.getAdvancedSearchOperator();
+                var html = '<span class="label label-warning" style="font-size: 11px; margin-right:6px;display:inline-block;margin-bottom:6px;">' +
+                    advancedSearchOperatorLabel + ': ' + (op === 'or' ? advancedSearchOrText : advancedSearchAndText) + '</span>';
+
+                Object.keys(filters).forEach(f => {
+                    html += '<span class="label label-primary" style="font-size: 11px; margin-right:6px;display:inline-block;margin-bottom:6px;"><b>' +
+                        (colMap[f] || f).replace(/<[^>]*>/g, '') + ':</b> ' + escapeAdvancedSearchValue(filters[f]) +
+                        ' <a href="javascript:void(0)" class="snipe-advanced-search-tag-remove" data-field="' + f +
+                        '" style="color:#fff;margin-left:6px;text-decoration:none;">&times;</a></span>';
+                });
+
+                $tagContainer
+                    .html(html)
+                    .off('click.snipeAdvancedSearchTags')
+                    .on('click.snipeAdvancedSearchTags', '.snipe-advanced-search-tag-remove', function (e) {
+                        e.preventDefault();
+                        var field = $(this).data('field');
+                        if (field && _this.filterColumnsPartial) {
+                            delete _this.filterColumnsPartial[field];
+                            _this.options.pageNumber = 1;
+                            _this.initSearch();
+                            _this.updatePagination();
+                            _this.trigger('column-advanced-search', _this.filterColumnsPartial, _this.getAdvancedSearchOperator());
+
+                            _this.renderAdvancedSearchTags();
+                        }
+                    });
+
+                this.updateAdvancedSearchButtonState();
+            };
+
+            BootstrapTable.prototype.applyAdvancedSearch = function () {
+                var toolbarState = this.collectAdvancedSearchFormData();
+
+                this.filterColumnsPartial = toolbarState.filters;
+                this.setAdvancedSearchOperator(toolbarState.operator);
+
+                if (this.options.sidePagination !== 'server') {
+                    this.options.pageNumber = 1;
+                    this.initSearch();
+                    this.updatePagination();
+                    this.trigger('column-advanced-search', this.filterColumnsPartial, this.getAdvancedSearchOperator());
+                }
+
+                this.renderAdvancedSearchTags();
+                this.updateAdvancedSearchButtonState();
+
+                this.hideToolbarModal();
+            };
+
+            BootstrapTable.prototype.cancelAdvancedSearch = function () {
+                this.filterColumnsPartial = {};
+                this.options.pageNumber = 1;
+                this.initSearch();
+                this.updatePagination();
+                this.trigger('column-advanced-search', this.filterColumnsPartial, this.getAdvancedSearchOperator());
+                this.renderAdvancedSearchTags();
+                this.updateAdvancedSearchButtonState();
+                // Reset the form inputs so the fields appear empty when re-opened
+                if (this.$toolbarModal) {
+                    this.$toolbarModal.find('.toolbar-model-form')[0] && this.$toolbarModal.find('.toolbar-model-form')[0].reset();
+                    this.$toolbarModal.find('input[type="text"]').val('');
+                }
+                this.hideToolbarModal();
+            };
+
+            BootstrapTable.prototype.createToolbarForm = function () {
+                var filterColumnsPartial = this.filterColumnsPartial || {};
+                var html = [`<form class="form-horizontal toolbar-model-form" action="${this.options.actionForm}">`];
+                var operator = this.getAdvancedSearchOperator();
+
+                html.push('<div class="form-group row"><div class="col-sm-12"><p class="help-block"><i class="fa fa-solid fa-lightbulb text-info" aria-hidden="true"></i> {!! trans('general.search_tip') !!}</p></div></div>');
+
+                html.push(`
+                    <div class="form-group row">
+                        <label class="col-sm-4 control-label">${this.options.formatAdvancedSearchOperator()}</label>
+                        <div class="col-sm-6">
+                            <select class="form-control ${this.constants.classes.input}" name="__advanced_search_operator">
+                                <option value="and"${operator === 'and' ? ' selected' : ''}>${advancedSearchAndText}</option>
+                                <option value="or"${operator === 'or' ? ' selected' : ''}>${advancedSearchOrText}</option>
+                            </select>
+                        </div>
+                    </div>
+                `);
+
+                for (var columnIndex = 0; columnIndex < this.columns.length; columnIndex++) {
+                    var column = this.columns[columnIndex];
+
+                    if (!column.checkbox && column.visible && column.searchable) {
+                        var title = $('<div/>').html(column.title).text().trim();
+                        var value = filterColumnsPartial[column.field] || '';
+
+                        html.push(`
+                            <div class="form-group row">
+                                <label class="col-sm-4 control-label">${title}</label>
+                                <div class="col-sm-6">
+                                    <input
+                                        type="text"
+                                        class="form-control ${this.constants.classes.input}"
+                                        name="${column.field}"
+                                        placeholder="${escapeAdvancedSearchValue(title)}"
+                                        value="${escapeAdvancedSearchValue(value)}"
+                                    >
+                                </div>
+                            </div>
+                        `);
+                    }
+                }
+
+                html.push('</form>');
+
+                return html.join('');
+            };
+
+            BootstrapTable.prototype.initAdvancedSearchFooter = function () {
+                var _this = this;
+                var $footer = this.$toolbarModal.find('.toolbar-modal-footer');
+                var $templateButton = $footer.find('.toolbar-modal-close').first();
+
+                if (!this._advancedSearchFooterButtonTagName) {
+                    this._advancedSearchFooterButtonTagName = ($templateButton.prop('tagName') || $footer.find('button,a').first().prop('tagName') || 'button').toLowerCase();
+                }
+
+                if (!this._advancedSearchFooterButtonBaseClass) {
+                    var buttonClassSource = ($templateButton.attr('class') || $footer.find('button,a').first().attr('class') || '');
+
+                    this._advancedSearchFooterButtonBaseClass = buttonClassSource
+                        .replace(/\btoolbar-modal-close\b/g, '')
+                        .replace(/\btoolbar-modal-cancel\b/g, '')
+                        .replace(/\btoolbar-modal-search\b/g, '')
+                        .replace(/\bpull-left\b/g, '')
+                        .trim();
+                }
+
+                var tagName = this._advancedSearchFooterButtonTagName;
+                var baseClass = this._advancedSearchFooterButtonBaseClass;
+
+                var createFooterButton = function (text, extraClass) {
+                    var $button = $('<' + tagName + '>').addClass($.trim(baseClass + ' ' + extraClass)).html(text);
+
+                    if (tagName === 'button') {
+                        $button.attr('type', 'button');
+                    }
+
+                    if (tagName === 'a') {
+                        $button.attr('href', 'javascript:void(0)');
+                    }
+
+                    return $button;
+                };
+
+                var $cancelButton = createFooterButton(this.options.formatAdvancedCancelButton(), 'toolbar-modal-cancel');
+                var $searchButton = createFooterButton(this.options.formatAdvancedCloseButton(), 'toolbar-modal-search');
+
+                // Keep cancel on the left for clearer primary/secondary action separation.
+                $cancelButton.addClass('pull-left');
+
+                $footer.empty().append($cancelButton, $searchButton);
+
+                $cancelButton.off('click').on('click', function (event) {
+                    event.preventDefault();
+                    _this.cancelAdvancedSearch();
+                });
+
+                $searchButton.off('click').on('click', function (event) {
+                    event.preventDefault();
+                    _this.applyAdvancedSearch();
+                });
+            };
+
+            BootstrapTable.prototype.initToolbarModalBody = function () {
+                var _this = this;
+
+                this.$toolbarModal.find('.toolbar-modal-title').html(this.options.formatAdvancedSearch());
+                this.$toolbarModal.find('.toolbar-modal-body')
+                    .html(this.createToolbarForm())
+                    .off('submit', '.toolbar-model-form')
+                    .on('submit', '.toolbar-model-form', function (event) {
+                        event.preventDefault();
+                        _this.applyAdvancedSearch();
+                    });
+
+                // Let Enter keypresses reuse the same submit path so keyboard users can apply filters quickly.
+                this.$toolbarModal.find('.toolbar-model-form')
+                    .off('keydown.snipeAdvancedSearch')
+                    .on('keydown.snipeAdvancedSearch', ':input', function (event) {
+                        if (event.key !== 'Enter' || $(event.target).is('textarea')) {
+                            return;
+                        }
+
+                        event.preventDefault();
+                        $(this).closest('form').trigger('submit');
+                    });
+
+                this.initAdvancedSearchFooter();
+            };
+
+            BootstrapTable.prototype.initSearch = function () {
+                var _this = this;
+
+                baseInitSearch.apply(this, arguments);
+
+                if (!this.options.advancedSearch || this.options.sidePagination === 'server') {
+                    return;
+                }
+
+                var filters = $.isEmptyObject(this.filterColumnsPartial) ? null : this.filterColumnsPartial;
+
+                if (!filters) {
+                    return;
+                }
+
+                var operator = this.getAdvancedSearchOperator();
+
+                this.data = this.data.filter(function (item, index) {
+                    var matches = [];
+                    var matchFound = false;
+                    var allMatched = true;
+
+                    $.each(filters, function (key, value) {
+                        var searchValue = value.toLowerCase();
+                        var formattedValue = item[key];
+                        var headerIndex = _this.header.fields.indexOf(key);
+                        var isMatch;
+
+                        formattedValue = $.fn.bootstrapTable.utils.calculateObjectValue(_this.header, _this.header.formatters[headerIndex], [formattedValue, item, index], formattedValue);
+
+                        if (_this.header.formatters[headerIndex]) {
+                            formattedValue = $('<div>').html(formattedValue).text();
+                        }
+
+                        isMatch = headerIndex !== -1 && (typeof formattedValue === 'string' || typeof formattedValue === 'number') && "".concat(formattedValue).toLowerCase().includes(searchValue);
+
+                        matches.push(isMatch);
+                        matchFound = matchFound || isMatch;
+                        allMatched = allMatched && isMatch;
+                    });
+
+                    if (!matches.length) {
+                        return true;
+                    }
+
+                    return operator === 'or' ? matchFound : allMatched;
+                });
+
+                this.unsortedData = this.data.slice();
+            };
 
         var blockedFields = "searchable,sortable,switchable,title,visible,formatter,class".split(",");
 
@@ -24,6 +444,36 @@
             }
             return false;
         }
+
+        /** This handles the responsive tab UI on v iew detail pages **/
+        function resize() {
+            if ($(window).width() < 767) {
+                $('.nav-tabs-dropdown').addClass('nav-justified');
+                $('.uploadtab').removeClass('pull-right');
+
+            }
+            else {
+                $('.nav-tabs-dropdown').removeClass('nav-justified');
+                $('.uploadtab').addClass('pull-right');
+            }
+        }
+
+        // Run once on initial ready (already inside top-level ready block)
+        resize();
+
+        // Watch for window resize events
+        $(window).on('resize', function () {
+            resize();
+        });
+
+        //open and close tab menu
+        $('.nav-tabs-dropdown').on("click", "li:not('.active') a", function (event) {
+            $(this).closest('ul').removeClass("open");
+        }).on("click", "li.active a", function (event) {
+            $(this).closest('ul').toggleClass("open");
+        });
+
+        /** End handling the responsive tab UI on view detail pages **/
 
         $('.snipe-table').bootstrapTable('destroy').each(function () {
 
@@ -46,7 +496,9 @@
                 if (cell.is('th')) {
                     return cell.find('.th-inner').text()
                 }
-                return htmlData
+                // Convert <br> tags to newlines so that line breaks in notes and
+                // textarea fields survive HTML-stripping during export
+                return htmlData.replace(/<br\s*\/?>/gi, '\n');
             }
 
             // This allows us to override the table defaults set below using the data-dash attributes
@@ -60,6 +512,11 @@
             }
 
 
+
+            var initialAdvancedSearchOperator = getStoredAdvancedSearchOperator() || normalizeAdvancedSearchOperator(data_with_default('advanced-search-operator', defaultAdvancedSearchOperator));
+
+            $(this).data('advanced-search-filter-operator', initialAdvancedSearchOperator);
+
             $(this).bootstrapTable({
 
                 ajaxOptions: {
@@ -67,39 +524,62 @@
                         'X-CSRF-TOKEN': $('meta[name="csrf-token"]').attr('content')
                     }
                 },
-                classes: 'table table-responsive table-striped snipe-table table-no-bordered',
                 // reorderableColumns: true,
+                // buttonsPrefix: "btn",
+                addrbar: {{ (config('session.bs_table_addrbar') == 'true') ? 'true' : 'false'}}, // deeplink search phrases, sorting, etc
+                advancedSearch: data_with_default('advanced-search', true),
+                advancedSearchOperator: initialAdvancedSearchOperator,
+                buttonsClass: "tableButton tableButton btn-theme hidden-print",
+                buttonsOrder: [
+                    'columns',
+                    'btnAdd',
+                    'btnShowDeleted',
+                    'btnToggleCompleted',
+                    'btnDue',
+                    'btnOverdue',
+                    'btnShowAdmins',
+                    'btnShowExpiring',
+                    'btnShowInactive',
+                    'refresh',
+                    'btnExport',
+                    'export',
+                    'print',
+                    'fullscreen',
+                    'advancedSearch',
+                ],
+                classes: 'table table-responsive table-striped snipe-table table-no-bordered',
+                clickToSelect: data_with_default('click-to-select', true),
+                cookie: true,
+                cookieExpire: '2y',
+                cookieStorage: '{{ config('session.bs_table_storage') }}',
+                iconsPrefix: 'fa',
+                maintainSelected: data_with_default('maintain-selected', true),
+                minimumCountColumns: data_with_default('minimum-count-columns', 2),
+                mobileResponsive: data_with_default('mobile-responsive', true),
+                pagination: data_with_default('pagination', true),
+                paginationFirstText: "{{ trans('general.first') }}",
+                paginationLastText: "{{ trans('general.last') }}",
+                paginationNextText: "{{ trans('general.next') }}",
+                paginationPreText: "{{ trans('general.previous') }}",
+                search: data_with_default('search', true),
+                searchText: "{{ request()->get('assetTag') ?? session()->get('search') }}", // this is needed so that people who incorrectly use the topsearch as an omnibar will not have an additional filter from BS tables
+                searchHighlight: data_with_default('search-highlight', true),
+                showColumns: data_with_default('show-columns', true),
+                showColumnsToggleAll: data_with_default('show-columns-toggle-all', true),
+                showExport: data_with_default('show-export', true),
+                showFullscreen: data_with_default('show-fullscreen', true),
+                showPrint: data_with_default('show-print', true),
+                showRefresh: data_with_default('show-refresh', true),
+                showSearchClearButton: data_with_default('show-search-clear-button', true),
+                sortName: data_with_default('sort-name', 'created_at'),
+                sortOrder: data_with_default('sort-order', 'desc'),
+                fixedColumns: data_with_default('fixed-columns', 'true'),
+                fixedRightNumber: data_with_default('fixed-right-number', '1'),
                 stickyHeader: true,
                 stickyHeaderOffsetLeft: parseInt($('body').css('padding-left'), 10),
                 stickyHeaderOffsetRight: parseInt($('body').css('padding-right'), 10),
-                undefinedText: '',
-                iconsPrefix: 'fa',
-                cookieStorage: '{{ config('session.bs_table_storage') }}',
-                cookie: true,
-                cookieExpire: '2y',
-                search: data_with_default('search', true),
-                advancedSearch: data_with_default('advanced-search', true),
-                searchHighlight: data_with_default('search-highlight', true),
-                clickToSelect: data_with_default('click-to-select', true),
-                showPrint: data_with_default('show-print', true),
-                showFullscreen: data_with_default('show-fullscreen', true),
-                showColumns: data_with_default('show-columns', true),
-                showExport: data_with_default('show-export', true),
-                showColumnsToggleAll: data_with_default('show-columns-toggle-all', true),
-                showRefresh: data_with_default('show-refresh', true),
-                pagination: data_with_default('pagination', true),
-                sortOrder: data_with_default('sort-order', 'desc'),
-                sortName: data_with_default('sort-name', 'created_at'),
-                minimumCountColumns: data_with_default('minimum-count-columns', 2),
-                mobileResponsive: data_with_default('mobile-responsive', true),
-                maintainSelected: data_with_default('maintain-selected', true),
                 trimOnSearch: false,
-                showSearchClearButton: data_with_default('show-search-clear-button', true),
-                addrbar: {{ (config('session.bs_table_addrbar') == 'true') ? 'true' : 'false'}}, // deeplink search phrases, sorting, etc
-                paginationFirstText: "{{ trans('general.first') }}",
-                paginationLastText: "{{ trans('general.last') }}",
-                paginationPreText: "{{ trans('general.previous') }}",
-                paginationNextText: "{{ trans('general.next') }}",
+                undefinedText: '',
                 pageList: ['10', '20', '30', '50', '100', '150', '200'{!! ((config('app.max_results') > 200) ? ",'500'" : '') !!}{!! ((config('app.max_results') > 500) ? ",'".config('app.max_results')."'" : '') !!}],
                 pageSize: {{  (($snipeSettings->per_page!='') && ($snipeSettings->per_page > 0)) ? $snipeSettings->per_page : 20 }},
                 paginationVAlign: 'both',
@@ -110,10 +590,24 @@
                             newParams[i] = params[i];
                         }
                     }
+
+                    if (newParams.filter) {
+                        newParams.filter_operator = $(table).data('advanced-search-filter-operator') || data_with_default('advanced-search-operator', 'and');
+                    }
+
                     return newParams;
                 },
                 formatLoadingMessage: function () {
                     return '<h2><x-icon type="spinner" /> {{ trans('general.loading') }} </h2>';
+                },
+                formatAdvancedCloseButton: function () {
+                    return advancedSearchSearchText;
+                },
+                formatAdvancedCancelButton: function () {
+                    return $.fn.bootstrapTable.defaults.formatClearSearch();
+                },
+                formatAdvancedSearchOperator: function () {
+                    return advancedSearchOperatorLabel;
                 },
                 icons: {
                     advancedSearchIcon: 'fas fa-search-plus',
@@ -121,13 +615,14 @@
                     paginationSwitchUp: 'fa-caret-square-o-up',
                     fullscreen: 'fa-expand',
                     columns: 'fa-columns',
+                    print: 'fa-print',
                     refresh: 'fas fa-sync-alt',
                     export: 'fa-download',
-                    clearSearch: 'fa-times'
+                    clearSearch: 'fa-times',
                 },
                 locale: '{{ app()->getLocale() }}',
                 exportOptions: export_options,
-                exportTypes: ['xlsx', 'excel', 'csv', 'pdf', 'json', 'xml', 'txt', 'sql', 'doc'],
+                exportTypes: ['xlsx', 'csv', 'pdf', 'json', 'xml', 'txt', 'sql', 'doc'],
                 onLoadSuccess: function () { // possible 'fixme'? this might be for contents, not for headers?
                     $('[data-tooltip="true"]').tooltip(); // Needed to attach tooltips after ajax call
                 },
@@ -135,6 +630,8 @@
                     var lookup = {};
                     var lookup_initialized = false;
                     var ths = $('th');
+                    var toolbar_buttons = $('.tableButton');
+
                     ths.each(function (index, element) {
                         th = $(element);
                         //only populate the lookup table once; don't need to keep doing it.
@@ -142,21 +639,48 @@
                             // th -> tr -> thead -> table
                             var table = th.parent().parent().parent()
                             var column_data = table.data('columns')
+
                             for (var column in column_data) {
                                 lookup[column_data[column].field] = column_data[column].titleTooltip;
                             }
+
                             lookup_initialized = true
                         }
 
                         field = th.data('field'); // find fieldname this column refers to
                         title = lookup[field];
+
                         if (title) {
                             th.attr('data-toggle', 'tooltip');
+                            th.attr('data-tooltip', 'true');
                             th.attr('data-placement', 'top');
-                            // th.attr('title', title) //this causes 'double-titles' which looks gross
                             th.tooltip({container: 'body', title: title});
+
                         }
-                    })
+                    });
+
+                    // Add tooltips to the toolbar buttons too
+                    toolbar_buttons.each(function (index, element) {
+                        tableButton = $(element);
+                        title = tableButton.attr('title');
+                        override_class = tableButton.attr('class');
+
+                        if (title) {
+                            // Keep this commented out so that we don't interfere with the dropdown toggle for columns, etc
+                            // tableButton.attr('data-toggle', 'tooltip');
+                            tableButton.attr('data-tooltip', 'true');
+                            tableButton.attr('data-placement', 'auto');
+
+                            // This prevents the slight button jitter on the mouseovees on the dashboard
+                            tableButton.tooltip({container: 'body', title: title});
+
+                            // This handles the case where we want a different color button than the default
+                            if ((override_class) && ((override_class.indexOf('btn-info') >= 0)) || (override_class.indexOf('btn-danger') >= 0)) {
+                                tableButton.removeClass('btn-primary');
+                            }
+                        }
+                    });
+
                 },
                 formatNoMatches: function () {
                     return '{{ trans('table.no_matching_records') }}';
@@ -164,7 +688,673 @@
 
             });
 
+            var bootstrapTableInstance = $(this).data('bootstrap.table');
+
+            if (bootstrapTableInstance && typeof bootstrapTableInstance.renderAdvancedSearchTags === 'function') {
+                bootstrapTableInstance.renderAdvancedSearchTags();
+            }
+
+            // Add btn-advanced-search class to the advanced search button for styling
+            if (bootstrapTableInstance) {
+                // Use a small delay to ensure toolbar is fully rendered
+                setTimeout(function () {
+                    var $advancedSearchBtn = bootstrapTableInstance.getAdvancedSearchButton();
+                    if ($advancedSearchBtn.length) {
+                        $advancedSearchBtn.addClass('btn-advanced-search');
+
+                        // Add data attribute if not present
+                        if (!$advancedSearchBtn.attr('data-toggle')) {
+                            $advancedSearchBtn.attr('data-toggle', 'advanced-search');
+                        }
+
+                        // Initialize button state
+                        bootstrapTableInstance.updateAdvancedSearchButtonState();
+                    }
+                }, 50);
+            }
+
         });
+
+        bindBulkEditSelectionHandler();
+        initializeBootstrapTableSearchUi();
+    });
+
+
+    // User table buttons
+    window.userButtons = () => ({
+        @can('create', \App\Models\User::class)
+        btnAdd: {
+            text: '{{ trans('general.create') }}',
+            icon: 'fa fa-plus',
+            event () {
+                window.location.href = '{{ route('users.create') }}';
+            },
+            attributes: {
+                title: '{{ trans('general.create') }}',
+                class: 'btn-warning',
+                @if ($snipeSettings->shortcuts_enabled == 1)
+                accesskey: 'n'
+                @endif
+            }
+        },
+        @endcan
+
+        btnExport: {
+            text: '{{ trans('general.export_all_to_csv') }}',
+            icon: 'fa-solid fa-file-csv',
+            event () {
+                window.location.href = '{{ route('users.export') }}';
+            },
+            attributes: {
+                title: '{{ trans('general.export_all_to_csv') }}',
+            }
+        },
+
+        btnShowAdmins: {
+            text: '{{ trans('general.show_admins') }}',
+            icon: 'fa-solid fa-crown',
+            event () {
+                window.location.href = '{{ (request()->input('admins') == "true") ? route('users.index') : route('users.index', ['admins' => 'true']) }}';
+            },
+            attributes: {
+                title: '{{ trans('general.show_admins') }}',
+                class: '{{ (request()->input('admins') == "true") ? ' btn-selected text-danger' : '' }}'
+            }
+        },
+
+        btnShowDeleted: {
+            text: '{{ (request()->input('status') == "deleted") ? trans('admin/users/table.show_current') : trans('admin/users/table.show_deleted') }}',
+            icon: 'fa-solid fa-trash',
+            event () {
+                window.location.href = '{{ (request()->input('status') == "deleted") ? route('users.index') : route('users.index', ['status' => 'deleted']) }}';
+            },
+            attributes: {
+                class: '{{ (request()->input('status') == "deleted") ? ' btn-selected' : '' }}',
+                title: '{{ (request()->input('status') == "deleted") ? trans('admin/users/table.show_current') : trans('admin/users/table.show_deleted') }}',
+
+            }
+        },
+
+    }); // end user table buttons
+
+    // Oauth table buttons
+    window.oauthButtons = () => ({
+
+        btnAdd: {
+            text: '{{ (request()->input('status') == "deleted") ? trans('admin/users/table.show_current') : trans('admin/users/table.show_deleted') }}',
+            icon: 'fa fa-plus',
+            attributes: {
+                event() {
+                    wire:click = "$dispatch('openModal')"
+                    onclick = "$('#modal-create-client').modal('show');"
+                },
+
+                title: '{{ trans('general.create') }}',
+                class: 'btn-warning',
+                @if ($snipeSettings->shortcuts_enabled == 1)
+                accesskey: 'n'
+                @endif
+            },
+        },
+
+    }); // end user table buttons
+
+
+    @can('create', \App\Models\Company::class)
+    // Company table buttons
+    window.companyButtons = () => ({
+        btnAdd: {
+            text: '{{ trans('general.create') }}',
+            icon: 'fa fa-plus',
+            event () {
+                window.location.href = '{{ route('companies.create') }}';
+            },
+            attributes: {
+                class: 'btn-warning',
+                title: '{{ trans('general.create') }}',
+                @if ($snipeSettings->shortcuts_enabled == 1)
+                accesskey: 'n'
+                @endif
+            }
+        },
+
+    }); // End company table buttons
+    @endcan
+
+
+    @can('create', \App\Models\Groups::class)
+    // Groups table buttons
+    window.groupButtons = () => ({
+        btnAdd: {
+            text: '{{ trans('general.create') }}',
+            icon: 'fa fa-plus',
+            event () {
+                window.location.href = '{{ route('groups.create') }}';
+            },
+            attributes: {
+                class: 'btn-warning',
+                title: '{{ trans('general.create') }}',
+                @if ($snipeSettings->shortcuts_enabled == 1)
+                accesskey: 'n'
+                @endif
+            }
+        },
+
+    }); // End Groups table buttons
+    @endcan
+
+
+    // Asset table buttons
+    window.assetButtons = () => ({
+        @can('create', \App\Models\Asset::class)
+        btnAdd: {
+            text: '{{ trans('general.create') }}',
+            icon: 'fa fa-plus',
+            event () {
+                window.location.href = '{{ route('hardware.create') }}';
+            },
+            attributes: {
+                title: '{{ trans('general.create') }}',
+                class: 'btn-warning',
+                @if ($snipeSettings->shortcuts_enabled == 1)
+                accesskey: 'n'
+                @endif
+            }
+        },
+        @endcan
+
+        @can('update', \App\Models\Asset::class)
+        btnAddMaintenance: {
+            text: '{{ trans('button.add_maintenance') }}',
+            icon: 'fa-solid fa-screwdriver-wrench',
+            event () {
+                window.location.href = '{{ route('maintenances.create', ['asset_id' => (isset($asset)) ? $asset->id :'' ]) }}';
+            },
+            attributes: {
+                title: '{{ trans('button.add_maintenance') }}',
+            }
+        },
+        @endcan
+
+
+        btnExport: {
+            text: '{{ trans('admin/hardware/general.custom_export') }}',
+            icon: 'fa-solid fa-file-csv',
+            event () {
+                window.location.href = '{{ route('reports/custom') }}';
+            },
+            attributes: {
+                title: '{{ trans('admin/hardware/general.custom_export') }}',
+            }
+        },
+
+        btnShowDeleted: {
+            text: '{{ (request()->input('status_type') == "Deleted") ? trans('general.list_all') : trans('general.deleted') }}',
+            icon: 'fa-solid fa-trash',
+            event () {
+                window.location.href = '{{ (request()->input('status_type') == "Deleted") ? route('hardware.index') : route('hardware.index', ['status_type' => 'Deleted']) }}';
+            },
+            attributes: {
+                class: '{{ (request()->input('status_type') == "Deleted") ? 'btn-selected' : '' }}',
+                title: '{{ (request()->input('status_type') == "Deleted") ? trans('general.list_all') : trans('general.deleted') }}',
+
+            }
+        },
+    });
+
+    @can('create', \App\Models\Location::class)
+    // Location table buttons
+    window.locationButtons = () => ({
+        btnAdd: {
+            text: '{{ trans('general.create') }}',
+            icon: 'fa fa-plus',
+            event () {
+                window.location.href = '{{ route('locations.create') }}';
+            },
+            attributes: {
+                class: 'btn-warning',
+                title: '{{ trans('general.create') }}',
+                @if ($snipeSettings->shortcuts_enabled == 1)
+                accesskey: 'n'
+                @endif
+            }
+        },
+
+        btnShowDeleted: {
+            text: '{{ (request()->input('status') == "deleted") ? trans('general.show_current') : trans('general.show_deleted') }}',
+            icon: 'fa-solid fa-trash',
+            event () {
+                window.location.href = '{{ (request()->input('status') == "deleted") ? route('locations.index') : route('locations.index', ['status' => 'deleted']) }}';
+            },
+            attributes: {
+                class: '{{ (request()->input('status') == "deleted") ? 'btn-selected' : '' }}',
+                title: '{{ (request()->input('status') == "deleted") ? trans('general.show_current') : trans('general.show_deleted') }}',
+
+            }
+        },
+    });
+    @endcan
+
+    @can('create', \App\Models\Accessory::class)
+    // Accessory table buttons
+    window.accessoryButtons = () => ({
+        btnAdd: {
+            text: '{{ trans('general.create') }}',
+            icon: 'fa fa-plus',
+            event () {
+                window.location.href = '{{ route('accessories.create') }}';
+            },
+            attributes: {
+                class: 'btn-warning',
+                title: '{{ trans('general.create') }}',
+                @if ($snipeSettings->shortcuts_enabled == 1)
+                accesskey: 'n'
+                @endif
+            }
+        },
+    });
+    @endcan
+
+    @can('create', \App\Models\Depreciation::class)
+    // Accessory table buttons
+    window.depreciationButtons = () => ({
+        btnAdd: {
+            text: '{{ trans('general.create') }}',
+            icon: 'fa fa-plus',
+            event () {
+                window.location.href = '{{ route('depreciations.create') }}';
+            },
+            attributes: {
+                class: 'btn-warning',
+                title: '{{ trans('general.create') }}',
+                @if ($snipeSettings->shortcuts_enabled == 1)
+                accesskey: 'n'
+                @endif
+            }
+        },
+    });
+    @endcan
+
+    @can('create', \App\Models\CustomField::class)
+    // Accessory table buttons
+    window.customFieldButtons = () => ({
+        btnAdd: {
+            text: '{{ trans('general.create') }}',
+            icon: 'fa fa-plus',
+            event () {
+                window.location.href = '{{ route('fields.create') }}';
+            },
+            attributes: {
+                class: 'btn-warning',
+                title: '{{ trans('general.create') }}',
+                @if ($snipeSettings->shortcuts_enabled == 1)
+                accesskey: 'n'
+                @endif
+            }
+        },
+    });
+    @endcan
+
+
+    @can('create', \App\Models\CustomFieldset::class)
+    // Accessory table buttons
+    window.customFieldsetButtons = () => ({
+        btnAdd: {
+            text: '{{ trans('general.create') }}',
+            icon: 'fa fa-plus',
+            event () {
+                window.location.href = '{{ route('fieldsets.create') }}';
+            },
+            attributes: {
+                class: 'btn-warning',
+                title: '{{ trans('general.create') }}',
+                @if ($snipeSettings->shortcuts_enabled == 1)
+                accesskey: 'n'
+                @endif
+            }
+        },
+    });
+    @endcan
+
+    @can('create', \App\Models\Component::class)
+    // Compoment table buttons
+    window.componentButtons = () => ({
+        btnAdd: {
+            text: '{{ trans('general.create') }}',
+            icon: 'fa fa-plus',
+            event () {
+                window.location.href = '{{ route('components.create') }}';
+            },
+            attributes: {
+                class: 'btn-warning',
+                title: '{{ trans('general.create') }}',
+                @if ($snipeSettings->shortcuts_enabled == 1)
+                accesskey: 'n'
+                @endif
+            }
+        },
+    });
+    @endcan
+
+    @can('create', \App\Models\Consumable::class)
+    // Consumable table buttons
+    window.consumableButtons = () => ({
+        btnAdd: {
+            text: '{{ trans('general.create') }}',
+            icon: 'fa fa-plus',
+            event () {
+                window.location.href = '{{ route('consumables.create') }}';
+            },
+            attributes: {
+                class: 'btn-warning',
+                title: '{{ trans('general.create') }}',
+                @if ($snipeSettings->shortcuts_enabled == 1)
+                accesskey: 'n'
+                @endif
+            }
+        },
+    });
+    @endcan
+
+    @can('create', \App\Models\Manufacturer::class)
+    // Manufacturer table buttons
+    window.manufacturerButtons = () => ({
+        btnAdd: {
+            text: '{{ trans('general.create') }}',
+            icon: 'fa fa-plus',
+            event () {
+                window.location.href = '{{ route('manufacturers.create') }}';
+            },
+            attributes: {
+                class: 'btn-warning',
+                title: '{{ trans('general.create') }}',
+                @if ($snipeSettings->shortcuts_enabled == 1)
+                accesskey: 'n'
+                @endif
+            },
+        },
+
+        btnShowDeleted: {
+            text: '{{ (request()->input('status') == "Deleted") ? trans('general.list_all') : trans('general.deleted') }}',
+            icon: 'fa-solid fa-trash',
+            event () {
+                window.location.href = '{{ (request()->input('status') == "deleted") ? route('manufacturers.index') : route('manufacturers.index', ['status' => 'deleted']) }}';
+            },
+            attributes: {
+                class: '{{ (request()->input('status') == "deleted") ? 'btn-selected' : '' }}',
+                title: '{{ (request()->input('status') == "deleted") ? trans('general.list_all') : trans('general.deleted') }}',
+
+            }
+        },
+    });
+    @endcan
+
+    @can('create', \App\Models\Supplier::class)
+    // Consumable table buttons
+    window.supplierButtons = () => ({
+        btnAdd: {
+            text: '{{ trans('general.create') }}',
+            icon: 'fa fa-plus',
+            event () {
+                window.location.href = '{{ route('suppliers.create') }}';
+            },
+            attributes: {
+                class: 'btn-warning',
+                title: '{{ trans('general.create') }}',
+                @if ($snipeSettings->shortcuts_enabled == 1)
+                accesskey: 'n'
+                @endif
+            }
+        },
+    });
+    @endcan
+
+    @can('create', \App\Models\Department::class)
+    // Department table buttons
+    window.departmentButtons = () => ({
+        btnAdd: {
+            text: '{{ trans('general.create') }}',
+            icon: 'fa fa-plus',
+            event () {
+                window.location.href = '{{ route('departments.create') }}';
+            },
+            attributes: {
+                class: 'btn-warning',
+                title: '{{ trans('general.create') }}',
+                @if ($snipeSettings->shortcuts_enabled == 1)
+                accesskey: 'n'
+                @endif
+            }
+        },
+    });
+    @endcan
+
+    @can('create', \App\Models\Department::class)
+    // Custom Field table buttons
+    window.departmentButtons = () => ({
+        btnAdd: {
+            text: '{{ trans('general.create') }}',
+            icon: 'fa fa-plus',
+            event () {
+                window.location.href = '{{ route('departments.create') }}';
+            },
+            attributes: {
+                class: 'btn-warning',
+                title: '{{ trans('general.create') }}',
+                @if ($snipeSettings->shortcuts_enabled == 1)
+                accesskey: 'n'
+                @endif
+            }
+        },
+    });
+    @endcan
+
+    @can('update', \App\Models\Asset::class)
+    // Custom Field table buttons
+    window.maintenanceButtons = () => ({
+        btnAdd: {
+            text: '{{ trans('general.create') }}',
+            icon: 'fa fa-plus',
+            event () {
+                window.location.href = '{{ route('maintenances.create', ['asset_id' => (isset($asset)) ? $asset->id :'' ]) }}';
+            },
+            attributes: {
+                class: 'btn-warning',
+                title: '{{ trans('button.add_maintenance') }}',
+                @if ($snipeSettings->shortcuts_enabled == 1)
+                accesskey: 'n'
+                @endif
+            }
+        },
+        btnToggleCompleted: {
+            text: '{{ request()->input('completed', 'false') === 'true' ? trans('admin/maintenances/general.show_active') : trans('admin/maintenances/general.show_completed') }}',
+            icon: 'fa-regular fa-square-check',
+            event() {
+                var isShowingCompleted = '{{ request()->input('completed', 'false') }}' === 'true';
+                window.location.href = '{{ route('maintenances.index') }}?completed=' + (isShowingCompleted ? 'false' : 'true');
+            },
+            attributes: {
+                class: '{{ request()->input('completed', 'false') === 'true' ? 'btn-selected' : '' }}',
+                title: '{{ request()->input('completed', 'false') === 'true' ? trans('admin/maintenances/general.show_active') : trans('admin/maintenances/general.show_completed') }}',
+            },
+        },
+
+        btnDue: {
+            text: '{{ trans('admin/maintenances/general.due') }}',
+            icon: 'fa-regular fa-clock',
+            event() {
+                var isActive = '{{ request()->input('upcoming_status') }}' === 'due';
+                window.location.href = '{{ route('maintenances.index') }}' + (isActive ? '' : '?upcoming_status=due');
+            },
+            attributes: {
+                class: '{{ request()->input('upcoming_status') === 'due' ? 'btn-selected' : '' }}',
+                title: '{{ trans('admin/maintenances/general.due') }}',
+            },
+        },
+
+        btnOverdue: {
+            text: '{{ trans('admin/maintenances/general.overdue') }}',
+            icon: 'fa-solid fa-triangle-exclamation',
+            event() {
+                var isActive = '{{ request()->input('upcoming_status') }}' === 'overdue';
+                window.location.href = '{{ route('maintenances.index') }}' + (isActive ? '' : '?upcoming_status=overdue');
+            },
+            attributes: {
+                class: '{{ request()->input('upcoming_status') === 'overdue' ? 'btn-selected' : '' }}',
+                title: '{{ trans('admin/maintenances/general.overdue') }}',
+            },
+        },
+    });
+    @endcan
+
+    @can('create', \App\Models\Category::class)
+    // Custom Field table buttons
+    window.categoryButtons = () => ({
+        btnAdd: {
+            text: '{{ trans('general.create') }}',
+            icon: 'fa fa-plus',
+            event () {
+                window.location.href = '{{ route('categories.create') }}';
+            },
+            attributes: {
+                class: 'btn-warning',
+                title: '{{ trans('general.create') }}',
+                @if ($snipeSettings->shortcuts_enabled == 1)
+                accesskey: 'n'
+                @endif
+            }
+        },
+    });
+    @endcan
+
+    @can('create', \App\Models\PredefinedKit::class)
+    // Custom Field table buttons
+    window.kitButtons = () => ({
+        btnAdd: {
+            text: '{{ trans('general.create') }}',
+            icon: 'fa fa-plus',
+            event () {
+                window.location.href = '{{ route('kits.create') }}';
+            },
+            attributes: {
+                class: 'btn-warning',
+                title: '{{ trans('general.create') }}',
+                @if ($snipeSettings->shortcuts_enabled == 1)
+                accesskey: 'n'
+                @endif
+            }
+        },
+    });
+    @endcan
+
+    @can('create', \App\Models\AssetModel::class)
+    // Custom Field table buttons
+    window.modelButtons = () => ({
+        btnAdd: {
+            text: '{{ trans('general.create') }}',
+            icon: 'fa fa-plus',
+            event () {
+                window.location.href = '{{ route('models.create') }}';
+            },
+            attributes: {
+                class: 'btn-warning',
+                title: '{{ trans('general.create') }}',
+                @if ($snipeSettings->shortcuts_enabled == 1)
+                accesskey: 'n'
+                @endif
+            }
+        },
+        btnShowDeleted: {
+            text: '{{ (request()->input('status') == "deleted") ? trans('general.list_all') : trans('general.deleted') }}',
+            icon: 'fa-solid fa-trash',
+            event () {
+                window.location.href = '{{ (request()->input('status') == "deleted") ? route('models.index') : route('models.index', ['status' => 'deleted']) }}';
+            },
+            attributes: {
+                class: '{{ (request()->input('status') == "deleted") ? ' btn-selected' : '' }}',
+                title: '{{ (request()->input('status') == "deleted") ? trans('general.list_all') : trans('general.deleted') }}',
+
+            }
+        },
+    });
+    @endcan
+
+    @can('create', \App\Models\Statuslabel::class)
+    // Status label table buttons
+    window.statuslabelButtons = () => ({
+        btnAdd: {
+            text: '{{ trans('general.create') }}',
+            icon: 'fa fa-plus',
+            event () {
+                window.location.href = '{{ route('statuslabels.create') }}';
+            },
+            attributes: {
+                class: 'btn-info',
+                title: '{{ trans('general.create') }}',
+                @if ($snipeSettings->shortcuts_enabled == 1)
+                accesskey: 'n'
+                @endif
+            }
+        },
+    });
+    @endcan
+
+
+    // License table buttons
+    window.licenseButtons = () => ({
+        @can('create', \App\Models\License::class)
+        btnAdd: {
+            text: '{{ trans('general.create') }}',
+            icon: 'fa fa-plus',
+            event () {
+                window.location.href = '{{ route('licenses.create') }}';
+            },
+            attributes: {
+                class: 'btn-warning',
+                title: '{{ trans('general.create') }}',
+                @if ($snipeSettings->shortcuts_enabled == 1)
+                accesskey: 'n'
+                @endif
+            },
+        },
+        @endcan
+
+        btnExport: {
+            text: '{{ trans('general.export_all_to_csv') }}',
+            icon: 'fa-solid fa-file-csv',
+            event () {
+                window.location.href = '{{ route('licenses.export', ['category_id' => (isset($category)) ? $category->id :'' ]) }}';
+            },
+            attributes: {
+                title: '{{ trans('general.export_all_to_csv') }}',
+            }
+        },
+
+        btnShowExpiring: {
+            text: '{{ (request()->input('status') == "expiring") ? trans('general.list_all') : trans('general.show_expiring') }}',
+            icon: 'fas fa-clock',
+            event () {
+                window.location.href = '{{ (request()->input('status') == "expiring") ? route('licenses.index') : route('licenses.index', ['status' => 'expiring']) }}';
+            },
+            attributes: {
+                class: "{{ (request()->input('status') == "expiring") ? ' btn-warning' : '' }}",
+                title: '{{ (request()->input('status') == "expiring") ? trans('general.list_all') : trans('general.show_expiring') }}',
+
+            }
+        },
+
+        btnShowInactive: {
+            text: '{{ (request()->input('status') == "inactive") ? trans('general.list_all') : trans('general.show_inactive') }}',
+            icon: 'fas fa-history',
+            event () {
+                window.location.href = '{{ (request()->input('status') == "inactive") ? route('licenses.index') : route('licenses.index', ['status' => 'inactive']) }}';
+            },
+            attributes: {
+                class: "{{ (request()->input('status') == "inactive") ? ' btn-warning' : '' }}",
+                title: '{{ (request()->input('status') == "inactive") ? trans('general.list_all') : trans('general.show_inactive') }}',
+
+            }
+        },
     });
 
 
@@ -179,6 +1369,30 @@
     }
 
 
+    function updateSelectedCount(table) {
+        var countId = $(table).data('selected-count-id');
+        if (!countId || !$(countId).length) return;
+        var count = $(table).bootstrapTable('getSelections').length;
+        $(countId).find('.badge').text(count);
+        if (count > 0) {
+            $(countId).show();
+        } else {
+            $(countId).hide();
+        }
+    }
+
+    $('.snipe-table').on('post-body.bs.table', function () {
+        var countId = $(this).data('selected-count-id');
+        if (!countId) return;
+        var $paginationDetail = $(this).closest('.bootstrap-table')
+            .find('.fixed-table-pagination').first()
+            .find('.pagination-detail');
+        if ($paginationDetail.length && $(countId).length === 0) {
+            $paginationDetail.after('<span id="' + countId.substring(1) + '" style="display:none; float:left; margin-top:10px; margin-bottom:10px; margin-left:10px; line-height:34px;">&mdash; <span class="badge">0</span> {{ trans('general.selected') }}</span>');
+        }
+        updateSelectedCount(this);
+    });
+
     // These methods dynamically add/remove hidden input values in the bulk actions form
     $('.snipe-table').on('check.bs.table .btSelectItem', function (row, $element) {
         var buttonName =  $(this).data('bulk-button-id');
@@ -186,12 +1400,12 @@
 
         $(buttonName).removeAttr('disabled');
         $(buttonName).after('<input id="' + tableId + '_checkbox_' + $element.id + '" type="hidden" name="ids[]" value="' + $element.id + '">');
+        updateSelectedCount(this);
     });
 
     $('.snipe-table').on('check-all.bs.table', function (event, rowsAfter) {
 
         var buttonName =  $(this).data('bulk-button-id');
-        $(buttonName).removeAttr('disabled');
         var tableId =  $(this).data('id-table');
 
         for (var i in rowsAfter) {
@@ -200,12 +1414,18 @@
                 $(buttonName).after('<input id="' + tableId + '_checkbox_' + rowsAfter[i].id + '" type="hidden" name="ids[]" value="' + rowsAfter[i].id + '">');
             }
         }
+
+        if ($(this).bootstrapTable('getSelections').length > 0) {
+            $(buttonName).removeAttr('disabled');
+        }
+        updateSelectedCount(this);
     });
 
 
     $('.snipe-table').on('uncheck.bs.table .btSelectItem', function (row, $element) {
         var tableId =  $(this).data('id-table');
         $( "#" + tableId + "_checkbox_" + $element.id).remove();
+        updateSelectedCount(this);
     });
 
 
@@ -228,6 +1448,7 @@
         for (var i in rowsBefore) {
             $('#' + tableId + "_checkbox_" + rowsBefore[i].id).remove();
         }
+        updateSelectedCount(this);
 
     });
 
@@ -267,7 +1488,6 @@
     });
 
 
-
     // This specifies the footer columns that should have special styles associated
     // (usually numbers)
     window.footerStyle = column => ({
@@ -300,10 +1520,51 @@
     // This only works for model index pages because it uses the row's model ID
     function genericRowLinkFormatter(destination) {
         return function (value,row) {
+
+            if ((row) && (row.tag_color) && (row.tag_color!='') && (row.tag_color!=undefined)) {
+                var tag_icon = '<i class="fa-solid fa-square" style="color: ' + row.tag_color + ';" aria-hidden="true"></i> ';
+            } else {
+                var tag_icon = '';
+            }
+
             if (value) {
-                return '<a href="{{ config('app.url') }}/' + destination + '/' + row.id + '">' + value + '</a>';
+                return '<span style="white-space:nowrap;">' + tag_icon + '<a href="{{ config('app.url') }}/' + destination + '/' + row.id + '">' + value + '</a></span>';
             }
         };
+    }
+
+
+
+    // This is a special formatter that will indicate whether a user is an admin or superadmin
+    function usernameRoleLinkFormatter(value, row) {
+
+            if ((value) && (row)) {
+
+                if (row.role === 'superadmin') {
+                    return '<span style="white-space: nowrap" data-tooltip="true" title="{{ trans('general.superuser_tooltip') }}"><x-icon type="superadmin" title="{{ trans('general.superuser') }}"  class="text-danger" /> <a href="{{ config('app.url') }}/users/' + row.id + '">' + value + '</a></span>';
+                } else if (row.role === 'admin') {
+                    return '<span style="white-space: nowrap" data-tooltip="true" title="{{ trans('general.admin_tooltip') }}"><x-icon type="superadmin" title="{{ trans('general.admin_user') }}" class="text-warning" /> <a href="{{ config('app.url') }}/users/' + row.id + '">' + value + '</a></span>';
+                }
+
+                // Regular user
+                return '<a href="{{ config('app.url') }}/users/' + row.id + '">' + value + '</a>';
+            }
+
+    }
+
+    function progressBarFormatter(value) {
+        var bar_color = 'danger';
+
+        if (value <= 25) {
+            bar_color = 'danger';
+        }
+        else if (value <= 75) {
+            bar_color = 'warning';
+        }
+        else if (value <= 100) {
+            bar_color = 'success';
+        }
+        return '<div class="progress progress-sm" data-tooltip="true" title="' + value + '%"><div class="progress-bar progress-bar-' + bar_color + '" role="progressbar" aria-valuenow="' + value + '" aria-valuemin="0" aria-valuemax="100" style="width: ' + value + '%; min-width: 0em;"></div></div>';
     }
 
     // Use this when we're introspecting into a column object and need to link
@@ -318,6 +1579,7 @@
                   'deployed': '{{ strtolower(trans('general.deployed')) }}',
                   'deployable': '{{ strtolower(trans('admin/hardware/general.deployable')) }}',
                   'archived': '{{ strtolower(trans('general.archived')) }}',
+                  'undeployable': '{{ strtolower(trans('general.undeployable')) }}',
                   'pending': '{{ strtolower(trans('general.pending')) }}'
                 }
 
@@ -348,26 +1610,50 @@
 
                 // Add some overrides for any funny urls we have
                 var dest = destination;
-                var dpolymorphicItemFormatterest = '';
-                if (destination=='fieldsets') {
-                    var dpolymorphicItemFormatterest = 'fields/';
+                var tag_color;
+                var polymorphicItemFormatterDest = '';
+
+
+
+                if (destination == 'fieldsets') {
+                    var polymorphicItemFormatterDest = 'fields/';
                 }
 
-                return '<nobr><a href="{{ config('app.url') }}/' + dpolymorphicItemFormatterest + dest + '/' + value.id + '">' + value.name + '</a></span>';
+                // Handle the preceding icon if a tag_color is given in the API response
+                if ((value.tag_color) && (value.tag_color!='')) {
+                    var tag_icon = '<i class="fa-solid fa-square" style="color: ' + value.tag_color + ';" aria-hidden="true"></i>';
+                } else {
+                    var tag_icon = '';
+                }
+
+                return '<nobr>'+ tag_icon + ' <a href="{{ config('app.url') }}/' + polymorphicItemFormatterDest + dest + '/' + value.id + '">' + value.name + '</a></span>';
             }
         };
     }
 
 
+    function colorTagFormatter(value, row) {
+        if (value) {
+            return '<i class="fa-solid fa-square" style="color: ' + value + ';" aria-hidden="true"></i> ' + value;
+        }
+    }
+
+
+
+
     function licenseKeyFormatter(value, row) {
-        return '<code class="single-line"><span class="js-copy-link" data-clipboard-target=".js-copy-key-' + row.id + '" aria-hidden="true" data-tooltip="true" data-placement="top" title="{{ trans('general.copy_to_clipboard') }}"><span class="js-copy-key-' + row.id + '">' + value + '</span></span></code>';
+        if (value) {
+            return '<code class="single-line"><span class="js-copy-link" data-clipboard-target=".js-copy-key-' + row.id + '" aria-hidden="true" data-tooltip="true" data-placement="top" title="{{ trans('general.copy_to_clipboard') }}"><span class="js-copy-key-' + row.id + '">' + value + '</span></span></code>';
+        }
     }
 
 
 
     function hardwareAuditFormatter(value, row) {
-        return '<a href="{{ config('app.url') }}/hardware/' + row.id + '/audit" class="actions btn btn-sm btn-primary" data-tooltip="true" title="{{ trans('general.audit') }}"><x-icon type="audit" /><span class="sr-only">{{ trans('general.audit') }}</span></a>&nbsp;';
+        return '<a href="{{ config('app.url') }}/hardware/' + row.id + '/audit" class="actions btn btn-sm btn-primary hidden-print" data-tooltip="true" title="{{ trans('general.audit') }}"><x-icon type="audit" /><span class="sr-only">{{ trans('general.audit') }}</span></a>&nbsp;';
     }
+
+
 
 
     // Make the edit/delete buttons
@@ -392,19 +1678,23 @@
                 dest = dest + '/' + row.owner_id + '/' + element_name;
             }
 
+            if ((row.available_actions) && (row.available_actions.create_asset === true)) {
+                actions += '<a href="{{ config('app.url') }}/hardware/create?model_id=' + row.id + '" class="actions btn btn-sm btn-info hidden-print" data-tooltip="true" title="{{ trans('general.new_asset') }}"><x-icon type="plus" class="fa-fw" /><span class="sr-only">{{ trans('general.new_asset') }}</span></a>&nbsp;';
+            }
+
             if ((row.available_actions) && (row.available_actions.clone === true)) {
-                actions += '<a href="{{ config('app.url') }}/' + dest + '/' + row.id + '/clone" class="actions btn btn-sm btn-info" data-tooltip="true" title="{{ trans('general.clone_item') }}"><x-icon type="clone" /><span class="sr-only">{{ trans('general.clone_item') }}</span></a>&nbsp;';
+                actions += '<a href="{{ config('app.url') }}/' + dest + '/' + row.id + '/clone" class="actions btn btn-sm btn-info hidden-print" data-tooltip="true" title="{{ trans('general.clone_item') }}"><x-icon type="clone" class="fa-fw" /><span class="sr-only">{{ trans('general.clone_item') }}</span></a>&nbsp;';
             }
 
             if ((row.available_actions) && (row.available_actions.audit === true)) {
-                actions += '<a href="{{ config('app.url') }}/' + dest + '/' + row.id + '/audit" class="actions btn btn-sm btn-primary" data-tooltip="true" title="{{ trans('general.audit') }}"><x-icon type="audit" /><span class="sr-only">{{ trans('general.audit') }}</span></a>&nbsp;';
+                actions += '<a href="{{ config('app.url') }}/' + dest + '/' + row.id + '/audit" class="actions btn btn-sm btn-primary hidden-print" data-tooltip="true" title="{{ trans('general.audit') }}"><x-icon type="audit" class="fa-fw" /><span class="sr-only">{{ trans('general.audit') }}</span></a>&nbsp;';
             }
 
             if ((row.available_actions) && (row.available_actions.update === true)) {
-                actions += '<a href="{{ config('app.url') }}/' + dest + '/' + row.id + '/edit" class="actions btn btn-sm btn-warning" data-tooltip="true" title="{{ trans('general.update') }}"><x-icon type="edit" /><span class="sr-only">{{ trans('general.update') }}</span></a>&nbsp;';
+                actions += '<a href="{{ config('app.url') }}/' + dest + '/' + row.id + '/edit" class="actions btn btn-sm btn-warning hidden-print" data-tooltip="true" title="{{ trans('general.update') }}"><x-icon type="edit" class="fa-fw" /><span class="sr-only">{{ trans('general.update') }}</span></a>&nbsp;';
             } else {
                 if ((row.available_actions) && (row.available_actions.update != true)) {
-                    actions += '<span data-tooltip="true" title="{{ trans('general.cannot_be_edited') }}"><a class="btn btn-warning btn-sm disabled" onClick="return false;"><x-icon type="edit" /></a></span>&nbsp;';
+                    actions += '<span data-tooltip="true" title="{{ trans('general.cannot_be_edited') }}"><a class="btn btn-warning btn-sm disabled" onClick="return false;"><x-icon type="edit" class="fa-fw" /></a></span>&nbsp;';
                 }
             }
 
@@ -414,8 +1704,6 @@
 
                 if (row.name) {
                     var name_for_box = row.name
-                } else if (row.title) {
-                    var name_for_box = row.title
                 } else if (row.asset_tag) {
                     var name_for_box = row.asset_tag
                 }
@@ -423,15 +1711,15 @@
 
                 
                 actions += '<a href="{{ config('app.url') }}/' + dest + '/' + row.id + '" '
-                    + ' class="actions btn btn-danger btn-sm delete-asset" data-tooltip="true"  '
-                    + ' data-toggle="modal" '
+                    + ' class="actions btn btn-danger btn-sm delete-asset hidden-print" data-tooltip="true"  '
+                    + ' data-toggle="modal" data-icon="fa-trash"'
                     + ' data-content="{{ trans('general.sure_to_delete') }}: ' + name_for_box + '?" '
                     + ' data-title="{{  trans('general.delete') }}" onClick="return false;">'
-                    + '<x-icon type="delete" /><span class="sr-only">{{ trans('general.delete') }}</span></a>&nbsp;';
+                    + '<x-icon type="delete" class="fa-fw" /><span class="sr-only">{{ trans('general.delete') }}</span></a>&nbsp;';
             } else {
                 // Do not show the delete button on things that are already deleted
                 if ((row.available_actions) && (row.available_actions.restore != true)) {
-                    actions += '<span data-tooltip="true" title="{{ trans('general.cannot_be_deleted') }}"><a class="btn btn-danger btn-sm delete-asset disabled" onClick="return false;"><x-icon type="delete" /><span class="sr-only">{{ trans('general.cannot_be_deleted') }}</span></a></span>&nbsp;';
+                    actions += '<span data-tooltip="true" title="{{ trans('general.cannot_be_deleted') }}"><a class="btn btn-danger btn-sm delete-asset disabled hidden-print" onClick="return false;"><x-icon type="delete" class="fa-fw" /><span class="sr-only">{{ trans('general.cannot_be_deleted') }}</span></a></span>&nbsp;';
                 }
 
             }
@@ -440,7 +1728,7 @@
             if ((row.available_actions) && (row.available_actions.restore === true)) {
                 actions += '<form style="display: inline;" method="POST" action="{{ config('app.url') }}/' + dest + '/' + row.id + '/restore"> ';
                 actions += '@csrf';
-                actions += '<button class="btn btn-sm btn-warning" data-tooltip="true" title="{{ trans('general.restore') }}"><x-icon type="restore" /><span class="sr-only">{{ trans('general.restore') }}</span></button>&nbsp;';
+                actions += '<button class="btn btn-sm btn-warning" data-tooltip="true" title="{{ trans('general.restore') }}"><x-icon type="restore" class="fa-fw" /><span class="sr-only">{{ trans('general.restore') }}</span></button>&nbsp;';
             }
 
             actions +='</nobr>';
@@ -458,30 +1746,53 @@
 
         if ((value) && (value.type)) {
 
-            if (value.type == 'asset') {
+            if (value.type === 'asset') {
                 item_destination = 'hardware';
                 item_icon = 'fas fa-barcode';
-            } else if (value.type == 'accessory') {
+            }
+            else if (value.type === 'accessory') {
                 item_destination = 'accessories';
                 item_icon = 'far fa-keyboard';
-            } else if (value.type == 'component') {
+            }
+            else if (value.type === 'component') {
                 item_destination = 'components';
                 item_icon = 'far fa-hdd';
-            } else if (value.type == 'consumable') {
+            }
+            else if (value.type === 'consumable') {
                 item_destination = 'consumables';
                 item_icon = 'fas fa-tint';
-            } else if (value.type == 'license') {
+            }
+            else if (value.type === 'license') {
                 item_destination = 'licenses';
                 item_icon = 'far fa-save';
-            } else if (value.type == 'user') {
+            }
+            else if (value.type === 'user') {
                 item_destination = 'users';
                 item_icon = 'fas fa-user';
-            } else if (value.type == 'location') {
+            }
+            else if (value.type === 'location') {
                 item_destination = 'locations'
                 item_icon = 'fas fa-map-marker-alt';
-            } else if (value.type == 'model') {
+            }
+            else if (value.type === 'maintenance') {
+                item_destination = 'maintenances'
+                item_icon = 'fa-solid fa-screwdriver-wrench';
+            }
+            else if (value.type === 'model') {
                 item_destination = 'models'
-                item_icon = '';
+                item_icon = 'fa-solid fa-boxes-stacked';
+            }
+            else if (value.type === 'supplier') {
+                item_destination = 'suppliers';
+                item_icon = 'fa-solid fa-store';
+            }
+            else if (value.type === 'department') {
+                item_destination = 'departments';
+                item_icon = 'fa-solid fa-building-user';
+            }
+            else if (value.type === 'company') {
+                item_destination = 'companies';
+                item_icon = 'fa-regular fa-building';
             }
 
             // display the username if it's checked out to a user, but don't do it if the username's there already
@@ -489,7 +1800,12 @@
                 value.name = value.name + ' (' + value.username + ')';
             }
 
-            return '<nobr><a href="{{ config('app.url') }}/' + item_destination +'/' + value.id + '" data-tooltip="true" title="' + value.type + '"><i class="' + item_icon + ' text-{{ $snipeSettings->skin!='' ? $snipeSettings->skin : 'blue' }} "></i> ' + value.name + '</a></nobr>';
+            // Show as strikethrough if it's been deleted
+            if (value.deleted_at && value.deleted_at != '') {
+                return '<nobr><span class="text-muted" data-tooltip="true" title="{{ trans('general.deleted') }} ' + value.type + '"><del><i class="' + item_icon + ' fa-fw"></i> ' + value.name + '</del></span></nobr>';
+            }
+
+            return '<nobr><a href="{{ config('app.url') }}/' + item_destination +'/' + value.id + '" data-tooltip="true" title="' + value.type + '"><i class="' + item_icon + ' fa-fw"></i> ' + value.name + '</a></nobr>';
 
         } else {
             return '';
@@ -519,27 +1835,43 @@
     // However since different bulk actions have different requirements, we have to walk through the available_actions object
     // to determine whether to disable it
     function checkboxEnabledFormatter (value, row) {
-
-        // add some stuff to get the value of the select2 option here?
-
-        if ((row.available_actions) && (row.available_actions.bulk_selectable) && (row.available_actions.bulk_selectable.delete !== true)) {
-            return {
-                disabled:true,
-                //checked: false, <-- not sure this will work the way we want?
+        if (row.available_actions && row.available_actions.bulk_selectable) {
+            var values = Object.values(row.available_actions.bulk_selectable);
+            if (values.length > 0 && !values.some(function (v) { return v === true; })) {
+                return { disabled: true };
             }
         }
     }
 
+    function licenseInOutFormatter(value, row) {
+        var user_can_checkout = row.available_actions && row.available_actions.user_can_checkout;
 
+        if (row.disabled === true) {
+            return '<span class="btn btn-sm bg-maroon btn-checkout disabled" data-tooltip="true" title="{{ trans('admin/licenses/message.checkout.license_is_inactive') }}">{{ trans('general.checkout') }}</span>';
+        } else if ((row.available_actions.checkout === true) && (user_can_checkout === true) && (row.disabled === false)) {
+            return '<a href="{{ config('app.url') }}/licenses/' + row.id + '/checkout" class="btn btn-sm bg-maroon btn-checkout" data-tooltip="true" title="{{ trans('general.checkout_tooltip') }}">{{ trans('general.checkout') }}</a>';
+        } else if (row.available_actions.checkout === true) {
+            return '<span class="btn btn-sm bg-maroon btn-checkout disabled" data-tooltip="true" title="{{ trans('admin/licenses/message.checkout.unavailable') }}">{{ trans('general.checkout') }}</span>';
+        }
+    }
     // We need a special formatter for license seats, since they don't work exactly the same
     // Checkouts need the license ID, checkins need the specific seat ID
 
     function licenseSeatInOutFormatter(value, row) {
-        // The user is allowed to check the license seat out and it's available
-        if ((row.available_actions.checkout === true) && (row.user_can_checkout === true) && ((!row.asset_id) && (!row.assigned_to))) {
-            return '<a href="{{ config('app.url') }}/licenses/' + row.license_id + '/checkout/'+row.id+'" class="btn btn-sm bg-maroon" data-tooltip="true" title="{{ trans('general.checkout_tooltip') }}">{{ trans('general.checkout') }}</a>';
-        } else {
+        if (row.disabled && (row.assigned_user || row.assigned_asset)) {
             return '<a href="{{ config('app.url') }}/licenses/' + row.id + '/checkin" class="btn btn-sm bg-purple" data-tooltip="true" title="{{ trans('general.checkin_tooltip') }}">{{ trans('general.checkin') }}</a>';
+        }
+        if (row.disabled) {
+            return '<a href="{{ config('app.url') }}/licenses/' + row.id + '/checkin" class="btn btn-sm bg-maroon btn-checkout disabled" data-tooltip="true" title="{{ trans('general.checkin_tooltip') }}">{{ trans('general.checkout') }}</a>';
+        }
+        // The user is allowed to check the license seat out and it's available
+        if ((row.available_actions.checkout === true) && (row.user_can_checkout === true) && ((!row.assigned_asset) && (!row.assigned_user))) {
+            return '<a href="{{ config('app.url') }}/licenses/' + row.license_id + '/checkout/'+row.id+'" class="btn btn-sm bg-maroon btn-checkout" data-tooltip="true" title="{{ trans('general.checkout_tooltip') }}">{{ trans('general.checkout') }}</a>';
+        }
+
+        // The user is allowed to check the license seat in and it's available
+        if ((row.available_actions.checkin === true) && ((row.assigned_asset) || (row.assigned_user))) {
+            return '<a href="{{ config('app.url') }}/licenses/' + row.id + '/checkin" class="btn btn-sm bg-purple btn-checkin" data-tooltip="true" title="{{ trans('general.checkin_tooltip') }}">{{ trans('general.checkin') }}</a>';
         }
 
     }
@@ -550,7 +1882,7 @@
             // The user is allowed to check items out, AND the item is deployable
             if ((row.available_actions.checkout == true) && (row.user_can_checkout == true) && ((!row.asset_id) && (!row.assigned_to))) {
 
-                    return '<a href="{{ config('app.url') }}/' + destination + '/' + row.id + '/checkout" class="btn btn-sm bg-maroon" data-tooltip="true" title="{{ trans('general.checkout_tooltip') }}">{{ trans('general.checkout') }}</a>';
+                    return '<a href="{{ config('app.url') }}/' + destination + '/' + row.id + '/checkout" class="btn btn-sm bg-maroon btn-checkout" data-tooltip="true" title="{{ trans('general.checkout_tooltip') }}">{{ trans('general.checkout') }}</a>';
 
             // The user is allowed to check items out, but the item is not able to be checked out
             } else if (((row.user_can_checkout == false)) && (row.available_actions.checkout == true) && (!row.assigned_to)) {
@@ -558,17 +1890,17 @@
                 // We use slightly different language for assets versus other things, since they are the only
                 // item that has a status label
                 if (destination =='hardware') {
-                    return '<span  data-tooltip="true" title="{{ trans('admin/hardware/general.undeployable_tooltip') }}"><a class="btn btn-sm bg-maroon disabled">{{ trans('general.checkout') }}</a></span>';
+                    return '<span  data-tooltip="true" title="{{ trans('admin/hardware/general.undeployable_tooltip') }}"><a class="btn btn-sm bg-maroon btn-checkout disabled">{{ trans('general.checkout') }}</a></span>';
                 } else {
-                    return '<span  data-tooltip="true" title="{{ trans('general.undeployable_tooltip') }}"><a class="btn btn-sm bg-maroon disabled">{{ trans('general.checkout') }}</a></span>';
+                    return '<span  data-tooltip="true" title="{{ trans('general.undeployable_tooltip') }}"><a class="btn btn-sm bg-maroon btn-checkout disabled">{{ trans('general.checkout') }}</a></span>';
                 }
 
             // The user is allowed to check items in
             } else if (row.available_actions.checkin == true)  {
                 if (row.assigned_to) {
-                    return '<a href="{{ config('app.url') }}/' + destination + '/' + row.id + '/checkin" class="btn btn-sm bg-purple" data-tooltip="true" title="{{ trans('general.checkin_tooltip') }}">{{ trans('general.checkin') }}</a>';
+                    return '<a href="{{ config('app.url') }}/' + destination + '/' + row.id + '/checkin" class="btn btn-sm bg-purple btn-checkin" data-tooltip="true" title="{{ trans('general.checkin_tooltip') }}">{{ trans('general.checkin') }}</a>';
                 } else if (row.assigned_pivot_id) {
-                    return '<a href="{{ config('app.url') }}/' + destination + '/' + row.assigned_pivot_id + '/checkin" class="btn btn-sm bg-purple" data-tooltip="true" title="{{ trans('general.checkin_tooltip') }}">{{ trans('general.checkin') }}</a>';
+                    return '<a href="{{ config('app.url') }}/' + destination + '/' + row.assigned_pivot_id + '/checkin" class="btn btn-sm bg-purple btn-checkin" data-tooltip="true" title="{{ trans('general.checkin_tooltip') }}">{{ trans('general.checkin') }}</a>';
                 }
 
             }
@@ -594,25 +1926,25 @@
 
 
     var formatters = [
-        'hardware',
         'accessories',
-        'consumables',
-        'components',
-        'locations',
-        'users',
-        'manufacturers',
-        'maintenances',
-        'statuslabels',
-        'models',
-        'licenses',
         'categories',
-        'suppliers',
-        'departments',
         'companies',
+        'components',
+        'consumables',
+        'departments',
         'depreciations',
         'fieldsets',
         'groups',
-        'kits'
+        'hardware',
+        'kits',
+        'licenses',
+        'locations',
+        'maintenances',
+        'manufacturers',
+        'models',
+        'statuslabels',
+        'suppliers',
+        'users',
     ];
 
     for (var i in formatters) {
@@ -663,6 +1995,13 @@
                         return '<a href="mailto:' + row.custom_fields[field_column_plain].value + '" style="white-space: nowrap" data-tooltip="true" title="{{ trans('general.send_email') }}"><x-icon type="email" /> ' + row.custom_fields[field_column_plain].value + '</a>';
                     }
                 }
+                // Convert newlines to <br> for textarea fields so they render in
+                // the table; export will convert <br> back to \n via onCellHtmlData
+                if (row.custom_fields[field_column_plain].element === 'textarea') {
+                    var val = row.custom_fields[field_column_plain].value;
+                    return val ? val.replace(/(?:\r\n|\r|\n)/g, '<br>') : '';
+                }
+
                 return row.custom_fields[field_column_plain].value;
 
             }
@@ -691,7 +2030,7 @@
         if (value) {
             var groups = '';
             for (var index in value.rows) {
-                groups += '<a href="{{ config('app.url') }}/admin/groups/' + value.rows[index].id + '" class="label label-default">' + value.rows[index].name + '</a> ';
+                groups += '<a href="{{ config('app.url') }}/admin/groups/' + value.rows[index].id + '" class="label label-light">' + value.rows[index].name + '</a> ';
             }
             return groups;
         }
@@ -701,7 +2040,7 @@
 
     function changeLogFormatter(value) {
 
-        var result = '';
+        var result = '<div style="word-break: break-word;">';
         var pretty_index = '';
 
             for (var index in value) {
@@ -719,7 +2058,7 @@
                 result += extra_pretty_index + ': <del>' + value[index].old + '</del>  <x-icon type="long-arrow-right" /> ' + value[index].new + '<br>'
             }
 
-        return result;
+        return result+'</div>';
 
     }
 
@@ -753,10 +2092,24 @@
         }
     }
 
+    // Create a linked phone number in the table list
+    function mobileFormatter(value) {
+        if (value) {
+            return  '<span style="white-space: nowrap;"><a href="tel:' + value + '" data-tooltip="true" title="{{ trans('general.call') }}"><x-icon type="mobile" /> ' + value + '</a></span>';
+        }
+    }
+
 
     function deployedLocationFormatter(row, value) {
         if ((row) && (row!=undefined)) {
-            return '<a href="{{ config('app.url') }}/locations/' + row.id + '">' + row.name + '</a>';
+            // Handle the preceding icon if a tag_color is given in the API response
+            if ((row.tag_color) && (row.tag_color!='')) {
+                var tag_icon = '<i class="fa-solid fa-square" style="color: ' + row.tag_color + ';" aria-hidden="true"></i> ';
+            } else {
+                var tag_icon = '';
+            }
+
+            return '<nobr>' + tag_icon +'<a href="{{ config('app.url') }}/locations/' + row.id + '">' + row.name + '</a></nobr>';
         } else if (value.rtd_location) {
             return '<a href="{{ config('app.url') }}/locations/' + value.rtd_location.id + '">' + value.rtd_location.name + '</a>';
         }
@@ -854,6 +2207,24 @@
         }
     }
 
+    function companiesLinkObjFormatter(value, row) {
+        if (!value) {
+            return '';
+        }
+        var icon = (value.tag_color) ? '<i class="fa-solid fa-square" style="color: ' + value.tag_color + ';" aria-hidden="true"></i> ' : '';
+        return '<a href="{{ config('app.url') }}/companies/' + value.id + '" class="label label-light">' + icon + value.name + '</a>';
+    }
+
+    function companiesArrayLinkFormatter(value, row) {
+        if (!value || !value.length) {
+            return '';
+        }
+        return value.map(function (c) {
+            var icon = (c.tag_color) ? '<i class="fa-solid fa-square" style="color: ' + c.tag_color + ';" aria-hidden="true"></i> ' : '';
+            return '<a href="{{ config('app.url') }}/companies/' + c.id + '" class="label label-light">' + icon + c.name + '</a></span>';
+        }).join(' ');
+    }
+
     function locationCompanyObjFilterFormatter(value, row) {
         if (value) {
             return '<a href="{{ url('/') }}/locations/?company_id=' + row.company.id + '">' + row.company.name + '</a>';
@@ -881,9 +2252,9 @@
         }
     }
 
-    function auditImageFormatter(value){
-        if (value){
-            return '<a href="' + value.url + '" data-toggle="lightbox" data-type="image"><img src="' + value.url + '" style="max-height: {{ $snipeSettings->thumbnail_max_h }}px; width: auto;" class="img-responsive" alt=""></a>'
+    function auditImageFormatter(value, row) {
+        if ((row) && (row.file) && (row.file.url)) {
+            return '<a href="' + row.file.url + '" data-toggle="lightbox" data-type="image"><img src="' + row.file.url + '" style="max-height: {{ $snipeSettings->thumbnail_max_h }}px; width: auto;" class="img-responsive" alt=""></a>'
         }
     }
 
@@ -905,26 +2276,167 @@
             return '<a href="' + value + '" data-toggle="lightbox" data-type="image"><img src="' + value + '" style="max-height: {{ $snipeSettings->thumbnail_max_h }}px; width: auto;" class="img-responsive" alt="' + altName + '"></a>';
         }
     }
+
+
+    // This is users in the user accounts section for EULAs
     function downloadFormatter(value) {
         if (value) {
-            return '<a href="' + value + '" class="btn btn-sm btn-default"><x-icon type="download" /></a>';
+            return '<a href="' + value + '" class="btn btn-sm btn-theme"><x-icon type="download" /></a>';
         }
     }
 
-    function fileUploadFormatter(value) {
+    // This is used by the UploadedFilesPresenter and the HistoryPresenter
+    // It handles the download and inline buttons for files that are uploaded to assets, users, etc
+    function fileDownloadButtonsFormatter(row, value) {
+
+        if (value)  {
+            if (value.url) {
+                var inlinable = value.inlineable;
+                var exists_on_disk = value.exists_on_disk;
+                var download_url = value.url;
+            } else if (value.file) {
+                var inlinable = value.file.inlineable;
+                var exists_on_disk = value.file.exists_on_disk;
+                var download_url = value.file.url;
+            } else {
+                return '';
+            }
+
+            var download_button = '<a href="' + download_url + '" class="btn btn-sm btn-theme" data-tooltip="true" title="{{ trans('general.download') }}"><x-icon type="download" /></a>';
+            var download_button_disabled = '<span data-tooltip="true" title="{{ trans('general.file_does_not_exist') }}"><a class="btn btn-sm btn-theme disabled"><x-icon type="download" /></a></span>';
+            var inline_button = '<a href="'+ download_url +'?inline=true" class="btn btn-sm btn-theme" target="_blank" data-tooltip="true" title="{{ trans('general.open_new_window') }}"><x-icon type="external-link" /></a>';
+            var inline_button_disabled = '<span data-tooltip="true" title="{{ trans('general.file_not_inlineable') }}"><a class="btn btn-sm btn-theme disabled" target="_blank" data-tooltip="true" title="{{ trans('general.file_does_not_exist') }}"><x-icon type="external-link" /></a></span>';
+
+            if (exists_on_disk === true) {
+                if (inlinable === true) {
+                    return '<span style="white-space: nowrap;">' + download_button + ' ' + inline_button + '</span>';
+                } else {
+                    return '<span style="white-space: nowrap;">' + download_button + ' ' + inline_button_disabled + '</span>';
+                }
+            } else {
+                return '<span style="white-space: nowrap;">' + download_button_disabled + ' ' + inline_button_disabled + '</span>';
+            }
+
+        }
+    }
+
+
+    function filePreviewFormatter(row, value) {
+
         if ((value) && (value.url) && (value.inlineable)) {
-            return '<a href="' + value.url + '" data-toggle="lightbox" data-type="image"><img src="' + value.url + '" style="max-height: {{ $snipeSettings->thumbnail_max_h }}px; width: auto;" class="img-responsive" alt=""></a>';
-        } else if ((value) && (value.url)) {
-            return '<a href="' + value.url + '" class="btn btn-default"><x-icon type="download" /></a>';
+
+            if (value.mediatype == 'image') {
+                return '<a href="' + value.url + '?inline=true" data-toggle="lightbox" data-type="image"><img src="' + value.url + '" style="max-height: {{ $snipeSettings->thumbnail_max_h }}px; width: auto;" class="img-responsive" alt=""></a>';
+            } else if (value.mediatype == 'video') {
+                return '<a href="' + value.url + '?inline=true" data-toggle="lightbox" data-type="video"><video style="max-height: {{ $snipeSettings->thumbnail_max_h }}px; width: auto;" class="img-responsive"><source src="' + value.url + '?inline=true"></video></a>';
+            } else if (value.mediatype == 'audio') {
+                return '<audio controls><source src="' + value.url + '?inline=true" type="audio/mp3">Your browser does not support the audio element.</audio>';
+            }
+            return '{{ trans('general.preview_not_available') }}';
         }
+        return '{{ trans('general.preview_not_available') }}';
+
     }
 
 
-    function fileUploadNameFormatter(value) {
-        if ((value) && (value.filename) && (value.url)) {
-            return '<a href="' + value.url + '">' + value.filename + '</a>';
+
+
+    // This is used in the table listings
+    function deleteUploadFormatter(value, row) {
+
+        if ((row.available_actions) && (row.available_actions.delete === true)) {
+            var destination;
+
+            // This is kinda gross, but for right now we're posting to the GUI delete routes
+            // All of these URLS and storage directories need to be updated to be more consistent :(
+            if (row.item.type === 'assetmodels') {
+                destination = 'models';
+            } else if (row.item.type === 'assets') {
+                destination = 'hardware';
+            } else {
+                destination = row.item.type;
+            }
+
+            return '<a href="{{ config('app.url') }}/' + destination + '/' + row.item.id + '/files/' + row.id + '/delete" '
+                + ' data-target="#dataConfirmModal" class="actions btn btn-danger btn-sm delete-asset" data-tooltip="true"  '
+                + ' data-toggle="modal" data-icon="fa-trash"'
+                + ' data-content="{{ trans('general.file_upload_status.confirm_delete') }}: ' + row.filename + '?" '
+                + ' data-title="{{  trans('general.delete') }}" onClick="return false;" data-icon="fa-trash">'
+                + '<x-icon type="delete" /><span class="sr-only">{{ trans('general.delete') }}</span></a>&nbsp;';
         }
     }
+
+    // This handles the custom view for the filestable blade component gallery-card component
+    window.customViewFormatter = data => {
+        const template = $('#fileGalleryTemplate').html()
+        let view = ''
+
+        $.each(data, function (i, row) {
+
+            delete_url = row.url +'/delete';
+
+            if (row.exists_on_disk === true)
+            {
+                if (row.mediatype === 'image') {
+                    embed_code = '<a href="' + row.url + '" data-toggle="lightbox" data-type="image" data-title="' + row.filename + row.filename + '" data-footer="' + row.note + '" class="embed-responsive-item"><img src="' + row.url + '?inline=true" alt="" style="max-width: 100%"></a>';
+                } else if (row.mediatype === 'video') {
+                    embed_code = '<a href="' + row.url + '" data-toggle="lightbox" data-type="video" data-title="' + row.filename + row.filename + '" data-footer="' + row.note + '" class="embed-responsive-item"><video controls><source src="' + row.url + '?inline=true" type="video/mp4">Your browser does not support the video tag.</video></a>';
+                } else if (row.mediatype === 'audio') {
+                    embed_code = '<audio style="width: 100%" controls><source src="' + row.url + '?inline=true" type="audio/mpeg">Your browser does not support the audio element.</audio>';
+                } else if (row.mediatype === 'pdf') {
+                    embed_code = '<object height="200" style="width: 100%" type="application/pdf" data="' + row.url + '?inline=true">File cannot be displayed</object>';
+                } else {
+                    embed_code = '<div class="text-center"><a href="' + row.url + '?inline=true"><i class="' + row.icon + '" style="font-size: 50px" /></i></a></div>';
+                }
+            } else {
+                embed_code = '<div class="text-center text-danger" style="padding-top: 20px;"><i class="fa-solid fa-heart-crack" style="font-size: 80px" /></i> <br><br>{{ trans('general.file_upload_status.file_not_found') }}</div>';
+            }
+
+            view += template.replace('%ID%', row.id)
+                .replace('%ICON%', row.icon)
+                .replace('%FILETYPE%', row.filetype)
+                .replace('%FILE_URL%', row.url)
+                .replace('%LINK_URL%', row.url)
+                .replace('%FILENAME%', (row.exists_on_disk === true) ? row.filename : '<x-icon type="x" /> <del>' + row.filename + '</del>')
+                .replace('%CREATED_AT%', row.created_at.formatted)
+                .replace('%CREATED_BY%', (row.created_by) ? row.created_by.name : '')
+                .replace('%NOTE%', (row.note) ? row.note : '')
+                .replace('%PANEL_CLASS%', (row.exists_on_disk === true) ? 'default' : 'danger')
+                .replace('%FILE_EMBED%', embed_code)
+                .replace('%DOWNLOAD_BUTTON%', (row.exists_on_disk === true) ? '<a href="'+ row.url +'" class="btn btn-sm btn-theme"><x-icon type="download" /></a> ' : '<span class="btn btn-sm btn-theme disabled" data-tooltip="true" title="{{ trans('general.file_upload_status.file_not_found') }}"><x-icon type="download" /></span>')
+                .replace('%NEW_WINDOW_BUTTON%', (row.exists_on_disk === true) ? '<a href="'+ row.url +'?inline=true" class="btn btn-sm btn-theme" target="_blank"><x-icon type="external-link" /></a> ' : '<span class="btn btn-sm btn-theme disabled" data-tooltip="true" title="{{ trans('general.file_upload_status.file_not_found') }}"><x-icon type="external-link"/></span>')
+                .replace('%DELETE_BUTTON%', (row.available_actions.delete === true) ?
+                    '<a href="'+delete_url+'" class="delete-asset btn btn-danger btn-sm" data-icon="fa-trash" data-toggle="modal" data-content="{{ trans('general.file_upload_status.confirm_delete') }} '+ row.filename +'?" data-title="{{ trans('general.delete') }}" onClick="return false;" data-target="#dataConfirmModal"><x-icon type="delete" /><span class="sr-only">{{ trans('general.delete') }}</span></a>' :
+                    '<a class="btn btn-sm btn-danger disabled" data-tooltip="true" title="{{ trans('general.file_upload_status.file_not_found') }}"><x-icon type="delete" /><span class="sr-only">{{ trans('general.delete') }}</span></a>'
+                );
+        })
+
+        return `<div class="row">${view}</div>`
+    }
+
+
+
+    function fileNameFormatter(row, value) {
+
+        if (value) {
+            if ((value.file) && (value.file.filename) && (value.file.url)) {
+
+                if (value.file.exists_on_disk === true) {
+                    return '<a href="' + value.file.url + '">' + value.file.filename + '</a>';
+                }
+
+                return '<span class="text-danger" style="text-decoration: line-through;" data-tooltip="true" title="{{ trans('general.file_does_not_exist') }}"><x-icon type="x" /> ' + value.file.filename + '</span>';
+
+            } else if ((value.filename) && (value.url)) {
+                if (value.exists_on_disk === true) {
+                    return '<a href="' + value.url + '">' + value.filename + '</a>';
+                }
+                return '<span class="text-danger" style="text-decoration: line-through;" data-tooltip="true" title="{{ trans('general.file_does_not_exist') }}"><x-icon type="x" /> ' + value.filename + '</span>';
+            }
+        }
+
+    }
+
 
     function linkToUserSectionBasedOnCount (count, id, section) {
         if (count) {
@@ -1057,7 +2569,7 @@
         return value
     }
 
-    $(function () {
+    function bindBulkEditSelectionHandler() {
         $('#bulkEdit').click(function () {
             var selectedIds = $('.snipe-table').bootstrapTable('getSelections');
             $.each(selectedIds, function(key,value) {
@@ -1065,11 +2577,9 @@
             });
 
         });
-    });
+    }
 
-
-
-    $(function() {
+    function initializeBootstrapTableSearchUi() {
 
         // This handles the search box highlighting on both ajax and client-side
         // bootstrap tables
@@ -1087,20 +2597,33 @@
             });
         };
 
+        $("[name='clearSearch']").click(function () {
+
+            // This hacks around a stupid issue in BS tables where the search text would get remembered for way too long even after it was cleared
+            for (storedSearch in localStorage) {
+                if (storedSearch.endsWith('.bs.table.searchText')) {
+                    localStorage.removeItem(storedSearch);
+                }
+            }
+
+            $('.search-input').each(function (index, element) {
+                $(element).val('');
+            });
+        });
+
         $('.search button[name=clearSearch]').click(searchboxHighlighter);
         searchboxHighlighter({ name:'pageload'});
         $('.search-input').keyup(searchboxHighlighter);
 
         //  This is necessary to make the bootstrap tooltips work inside of the
         // wenzhixin/bootstrap-table formatters
-        $('#table').on('post-body.bs.table', function () {
+        $(document).on('post-body.bs.table', '.snipe-table', function () {
             $('[data-tooltip="true"]').tooltip({
                 container: 'body'
             });
-
-
         });
-    });
+    }
+
 
 </script>
     

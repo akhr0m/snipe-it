@@ -67,6 +67,42 @@ class BulkDeleteUsersTest extends TestCase
         $this->assertNotSoftDeleted($actor);
     }
 
+    public function test_user_cannot_perform_bulk_actions_on_admin()
+    {
+        $actor = User::factory()->editUsers()->create();
+        $admin = User::factory()->admin()->create();
+
+        $this->actingAs($actor)
+            ->post(route('users/bulksave'), [
+                'ids' => [
+                    $admin->id,
+                ],
+                'delete_user' => '1',
+            ])
+            ->assertRedirect(route('users.index'))
+            ->assertSessionHas('success', trans('general.bulk_checkin_delete_success'));
+
+        $this->assertNotSoftDeleted($admin);
+    }
+
+    public function test_admin_cannot_perform_bulk_actions_on_superadmin()
+    {
+        $admin = User::factory()->admin()->create();
+        $superadmin = User::factory()->superuser()->create();
+
+        $this->actingAs($admin)
+            ->post(route('users/bulksave'), [
+                'ids' => [
+                    $superadmin->id,
+                ],
+                'delete_user' => '1',
+            ])
+            ->assertRedirect(route('users.index'))
+            ->assertSessionHas('success', trans('general.bulk_checkin_delete_success'));
+
+        $this->assertNotSoftDeleted($superadmin);
+    }
+
     public function test_accessories_can_be_bulk_checked_in()
     {
         [$accessoryA, $accessoryB] = Accessory::factory()->count(2)->create();
@@ -186,7 +222,7 @@ class BulkDeleteUsersTest extends TestCase
             'action_type' => 'checkin from',
             'target_id' => $userA->id,
             'target_type' => User::class,
-            'note' => 'Bulk checkin items',
+            'note' => 'Bulk checkin items on user bulk edit/delete',
             'item_type' => License::class,
             'item_id' => $licenseSeatForUserA->license->id,
         ]);
@@ -195,7 +231,7 @@ class BulkDeleteUsersTest extends TestCase
             'action_type' => 'checkin from',
             'target_id' => $userC->id,
             'target_type' => User::class,
-            'note' => 'Bulk checkin items',
+            'note' => 'Bulk checkin items on user bulk edit/delete',
             'item_type' => License::class,
             'item_id' => $licenseSeatForUserC->license->id,
         ]);
@@ -205,7 +241,7 @@ class BulkDeleteUsersTest extends TestCase
     {
         [$userA, $userB, $userC] = User::factory()->count(3)->create();
 
-        $this->actingAs(User::factory()->editUsers()->create())
+        $this->actingAs(User::factory()->admin()->create())
             ->post(route('users/bulksave'), [
                 'ids' => [
                     $userA->id,
@@ -247,11 +283,15 @@ class BulkDeleteUsersTest extends TestCase
 
     private function assertActionLogCheckInEntryFor(User $user, Model $model): void
     {
+        $note = $model instanceof Accessory
+            ? 'Bulk checkin accessory on user bulk edit/delete'
+            : 'Bulk checkin items on user bulk edit/delete';
+
         $this->assertDatabaseHas('action_logs', [
             'action_type' => 'checkin from',
             'target_id' => $user->id,
             'target_type' => User::class,
-            'note' => 'Bulk checkin items',
+            'note' => $note,
             'item_type' => get_class($model),
             'item_id' => $model->id,
         ]);
@@ -263,7 +303,7 @@ class BulkDeleteUsersTest extends TestCase
             'action_type' => 'checkin from',
             'target_id' => $user->id,
             'target_type' => User::class,
-            'note' => 'Bulk checkin items',
+            'note' => 'Bulk checkin items on user bulk edit/delete',
             'item_type' => get_class($model),
             'item_id' => $model->id,
         ]);

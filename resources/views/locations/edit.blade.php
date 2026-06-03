@@ -2,8 +2,6 @@
     'createText' => trans('admin/locations/table.create') ,
     'updateText' => trans('admin/locations/table.update'),
     'topSubmit' => true,
-    'helpPosition' => 'right',
-    'helpText' => trans('admin/locations/table.about_locations'),
     'formAction' => (isset($item->id)) ? route('locations.update', ['location' => $item->id]) : route('locations.store'),
 ])
 
@@ -12,7 +10,7 @@
 @include ('partials.forms.edit.name', ['translated_name' => trans('admin/locations/table.name')])
 
 <!-- parent -->
-@include ('partials.forms.edit.location-select', ['translated_name' => trans('admin/locations/table.parent'), 'fieldname' => 'parent_id'])
+@include ('partials.forms.edit.location-select', ['translated_name' => trans('admin/locations/table.parent'), 'fieldname' => 'parent_id', 'exclude_id' => isset($item) ? $item->id : null])
 
 <!-- Manager-->
 @include ('partials.forms.edit.user-select', ['translated_name' => trans('admin/users/table.manager'), 'fieldname' => 'manager_id'])
@@ -78,5 +76,20 @@
     </div>
 </div>
 
+<fieldset name="color-preferences">
+    <x-form.legend help_text="{{ trans('general.tag_color_help') }}">
+        {{ trans('general.tag_color') }}
+    </x-form.legend>
+    <!--  color -->
+    <div class="form-group {{ $errors->has('tag_color') ? 'error' : '' }}">
+        <label for="tag_color" class="col-md-3 control-label">
+            {{ trans('general.tag_color') }}
+        </label>
+        <div class="col-md-9">
+            <x-input.colorpicker :item="$item" id="color" :value="old('color', ($item->color ?? '#f4f4f4'))" name="tag_color" id="tag_color" />
+            {!! $errors->first('tag_color', '<span class="alert-msg" aria-hidden="true">:message</span>') !!}
+        </div>
+    </div>
+</fieldset>
 @stop
 

@@ -2,13 +2,47 @@
 
 namespace Tests\Feature\Assets\Ui;
 
+use App\Models\Actionlog;
 use App\Models\Asset;
 use App\Models\User;
 use Tests\TestCase;
 
 class ShowAssetTest extends TestCase
 {
-    public function testPageForAssetWithMissingModelStillRenders()
+    public function test_permission_required_to_view_asset()
+    {
+        $this->actingAs(User::factory()->create())
+            ->get(route('hardware.show', Asset::factory()->create()))
+            ->assertForbidden();
+    }
+
+    public function test_can_view_asset()
+    {
+        $asset = Asset::factory()->create();
+
+        $this->actingAs(User::factory()->viewAssets()->create())
+            ->get(route('hardware.show', $asset))
+            ->assertSeeText($asset->asset_tag)
+            ->assertOk();
+    }
+
+    public function test_page_renders_when_journal_note_has_no_author()
+    {
+        $asset = Asset::factory()->create();
+
+        Actionlog::factory()->for($asset, 'item')->create([
+            'action_type' => 'note added',
+            'item_type' => Asset::class,
+            'note' => 'A note with no author',
+            'created_by' => null,
+        ]);
+
+        $this->actingAs(User::factory()->viewAssets()->create())
+            ->get(route('hardware.show', $asset))
+            ->assertOk();
+    }
+
+    public function test_page_for_asset_with_missing_model_still_renders()
     {
         $asset = Asset::factory()->create();
 

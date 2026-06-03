@@ -24,9 +24,25 @@ class CheckoutAcceptanceFactory extends Factory
         ];
     }
 
+    protected static bool $skipActionLog = false;
+
+    public function withoutActionLog(): static
+    {
+        // turn off for this create() call
+        static::$skipActionLog = true;
+
+        // ensure it turns back on AFTER creating
+        return $this->afterCreating(function () {
+            static::$skipActionLog = false;
+        });
+    }
+
     public function configure(): static
     {
         return $this->afterCreating(function (CheckoutAcceptance $acceptance) {
+            if (static::$skipActionLog) {
+                return; // short-circuit
+            }
             if ($acceptance->checkoutable instanceof Asset) {
                 $this->createdAssociatedActionLogEntry($acceptance);
             }
@@ -87,7 +103,7 @@ class CheckoutAcceptanceFactory extends Factory
         $acceptance->checkoutable->assetlog()->create([
             'action_type' => 'checkout',
             'target_id' => $acceptance->assigned_to_id,
-            'target_type' => get_class($acceptance->assignedTo),
+            'target_type' => User::class,
             'item_id' => $acceptance->checkoutable_id,
             'item_type' => $acceptance->checkoutable_type,
         ]);

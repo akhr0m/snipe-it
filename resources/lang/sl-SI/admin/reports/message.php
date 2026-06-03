@@ -2,8 +2,8 @@
 
 return [
     'about_templates' => 'O shranjenih predlogah',
-    'saving_templates_description' => 'Select your options, then enter the name of your template in the box above and click the \'Save Template\' button. Use the dropdown to select a previously saved template.',
-    'create'  => [
+    'saving_templates_description' => 'Izberite možnosti, nato v zgornje polje vnesite ime predloge in kliknite gumb »Shrani predlogo«. V spustnem meniju izberite že shranjeno predlogo.',
+    'create' => [
         'success' => 'Predloga je uspešno shranjena',
     ],
     'update' => [

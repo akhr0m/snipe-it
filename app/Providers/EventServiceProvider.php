@@ -3,7 +3,10 @@
 namespace App\Providers;
 
 use App\Listeners\CheckoutableListener;
+use App\Listeners\CheckoutablesCheckedOutInBulkListener;
+use App\Listeners\LogFailedLogin;
 use App\Listeners\LogListener;
+use App\Listeners\LogSuccessfulLogin;
 use Illuminate\Foundation\Support\Providers\EventServiceProvider as ServiceProvider;
 use App\Models\User;
 use App\Observers\UserObserver;
@@ -18,11 +21,11 @@ class EventServiceProvider extends ServiceProvider
      */
     protected $listen = [
         'Illuminate\Auth\Events\Login' => [
-            \App\Listeners\LogSuccessfulLogin::class,
+            LogSuccessfulLogin::class,
         ],
 
         'Illuminate\Auth\Events\Failed' => [
-            \App\Listeners\LogFailedLogin::class,
+            LogFailedLogin::class,
         ],
     ];
 
@@ -34,6 +37,7 @@ class EventServiceProvider extends ServiceProvider
     protected $subscribe = [
         LogListener::class,
         CheckoutableListener::class,
+        CheckoutablesCheckedOutInBulkListener::class,
     ];
  /**
      * Register any events for your application.
