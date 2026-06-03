@@ -14,14 +14,15 @@ return new class extends Migration
 {
     public function up(): void
     {
+        try {
+            Schema::table('user_reports', function (Blueprint $table) {
+                $table->dropForeign(['user_id']);
+            });
+        } catch (\Exception $e) {
+            // ignore if foreign key doesn't exist
+        }
+
         Schema::table('user_reports', function (Blueprint $table) {
-            try {
-                if (Schema::hasColumn('user_reports', 'user_id')) {
-                    $table->dropForeign(['user_id']);
-                }
-            } catch (\Exception $e) {
-                // ignore
-            }
 
             if (!Schema::hasColumn('user_reports', 'recipient_id')) {
                 $table->integer('recipient_id')->unsigned()->nullable();
