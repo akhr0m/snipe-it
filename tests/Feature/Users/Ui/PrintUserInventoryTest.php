@@ -8,14 +8,14 @@ use Tests\TestCase;
 
 class PrintUserInventoryTest extends TestCase
 {
-    public function testPermissionRequiredToPrintUserInventory()
+    public function test_permission_required_to_print_user_inventory()
     {
         $this->actingAs(User::factory()->create())
             ->get(route('users.print', User::factory()->create()))
             ->assertStatus(403);
     }
 
-    public function testCanPrintUserInventory()
+    public function test_can_print_user_inventory()
     {
         $actor = User::factory()->viewUsers()->create();
 
@@ -25,7 +25,7 @@ class PrintUserInventoryTest extends TestCase
             ->assertStatus(200);
     }
 
-    public function testCannotPrintUserInventoryFromAnotherCompany()
+    public function test_cannot_print_user_inventory_from_another_company()
     {
         $this->settings->enableMultipleFullCompanySupport();
 
@@ -37,5 +37,18 @@ class PrintUserInventoryTest extends TestCase
         $this->actingAs($actor)
             ->get(route('users.print', $user))
             ->assertStatus(302);
+    }
+
+    public function test_bulk_print_user_inventory_does_not_error_on_missing_indirect_items_count()
+    {
+        $actor = User::factory()->viewUsers()->create();
+        [$userA, $userB] = User::factory()->count(2)->create();
+
+        $this->actingAs($actor)
+            ->post(route('users/bulkedit'), [
+                'ids' => [$userA->id, $userB->id],
+                'bulk_actions' => 'print',
+            ])
+            ->assertOk();
     }
 }

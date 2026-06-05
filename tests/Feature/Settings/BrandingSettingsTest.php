@@ -2,16 +2,101 @@
 
 namespace Tests\Feature\Settings;
 
-use Tests\TestCase;
+use App\Models\Setting;
+use App\Models\User;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
-use App\Models\User;
-use App\Models\Setting;
-
+use PHPUnit\Framework\Attributes\DataProvider;
+use Tests\TestCase;
 
 class BrandingSettingsTest extends TestCase
 {
-    public function testSiteNameIsRequired()
+    public static function validColorProvider(): array
+    {
+        return [
+            'hex 6-digit' => ['#3c8dbc'],
+            'hex 3-digit' => ['#fff'],
+            'rgb' => ['rgb(10,20,30)'],
+            'rgba' => ['rgba(10,20,30,0.5)'],
+            'hsl' => ['hsl(120,50%,50%)'],
+            'hsla' => ['hsla(120,50%,50%,0.8)'],
+        ];
+    }
+
+    public static function invalidColorProvider(): array
+    {
+        return [
+            'named color' => ['red'],
+            'css injection payload' => ['red; }body{background:url(//evil.com)} .x{color: #'],
+            'url()' => ['url(http://evil.com)'],
+            'value with semicolon' => ['#3c8dbc; color: red'],
+        ];
+    }
+
+    #[DataProvider('validColorProvider')]
+    public function test_valid_header_color_can_be_saved(string $color): void
+    {
+        $this->actingAs(User::factory()->superuser()->create())
+            ->post(route('settings.branding.save'), ['header_color' => $color])
+            ->assertValid('header_color')
+            ->assertSessionHasNoErrors();
+
+        $this->assertDatabaseHas('settings', ['header_color' => $color]);
+    }
+
+    #[DataProvider('invalidColorProvider')]
+    public function test_invalid_header_color_is_rejected(string $color): void
+    {
+        $this->actingAs(User::factory()->superuser()->create())
+            ->from(route('settings.branding.index'))
+            ->post(route('settings.branding.save'), ['header_color' => $color])
+            ->assertInvalid(['header_color'])
+            ->assertSessionHasErrors(['header_color']);
+    }
+
+    #[DataProvider('validColorProvider')]
+    public function test_valid_link_colors_can_be_saved(string $color): void
+    {
+        $this->actingAs(User::factory()->superuser()->create())
+            ->post(route('settings.branding.save'), [
+                'link_light_color' => $color,
+                'link_dark_color' => $color,
+                'nav_link_color' => $color,
+            ])
+            ->assertValid(['link_light_color', 'link_dark_color', 'nav_link_color'])
+            ->assertSessionHasNoErrors();
+    }
+
+    #[DataProvider('invalidColorProvider')]
+    public function test_invalid_link_colors_are_rejected(string $color): void
+    {
+        $this->actingAs(User::factory()->superuser()->create())
+            ->from(route('settings.branding.index'))
+            ->post(route('settings.branding.save'), [
+                'link_light_color' => $color,
+                'link_dark_color' => $color,
+                'nav_link_color' => $color,
+            ])
+            ->assertInvalid(['link_light_color', 'link_dark_color', 'nav_link_color'])
+            ->assertSessionHasErrors(['link_light_color', 'link_dark_color', 'nav_link_color']);
+    }
+
+    public function test_setting_model_sanitizes_corrupt_header_color(): void
+    {
+        $setting = Setting::factory()->create();
+        $setting->setRawAttributes(['header_color' => 'red; }body{color:red}']);
+
+        $this->assertSame('#3c8dbc', $setting->header_color);
+    }
+
+    public function test_setting_model_passes_through_valid_header_color(): void
+    {
+        $setting = Setting::factory()->create(['header_color' => '#5fa4cc']);
+
+        $this->assertSame('#5fa4cc', $setting->header_color);
+    }
+
+    public function test_site_name_is_required()
     {
         $response = $this->actingAs(User::factory()->superuser()->create())
             ->from(route('settings.branding.index'))
@@ -24,7 +109,7 @@ class BrandingSettingsTest extends TestCase
         $this->followRedirects($response)->assertSee(trans('general.error'));
     }
 
-    public function testSiteNameCanBeSaved()
+    public function test_site_name_can_be_saved()
     {
         $response = $this->actingAs(User::factory()->superuser()->create())
             ->post(route('settings.branding.save', ['site_name' => 'My Awesome Site']))
@@ -36,34 +121,35 @@ class BrandingSettingsTest extends TestCase
         $this->followRedirects($response)->assertSee('alert-success');
     }
 
-
-    public function testLogoCanBeUploaded()
+    public function test_logo_can_be_uploaded()
     {
         Storage::fake('public');
         $setting = Setting::factory()->create(['logo' => null]);
 
         $response = $this->actingAs(User::factory()->superuser()->create())
             ->post(route('settings.branding.save',
-                ['logo' => UploadedFile::fake()->image('test_logo.png')->storeAs('', 'test_logo.png', 'public')]
+                ['logo' => UploadedFile::fake()->image('test_logo.png')]
             ))
             ->assertValid('logo')
             ->assertStatus(302)
             ->assertRedirect(route('settings.index'))
             ->assertSessionHasNoErrors();
 
+        // Assert files was stored...
+        Storage::disk('public')->assertExists($setting->logo);
+
         $this->followRedirects($response)->assertSee('alert-success');
 
         $setting->refresh();
-        Storage::disk('public')->assertExists($setting->logo);
     }
 
-    public function testLogoCanBeDeleted()
+    public function test_logo_can_be_deleted()
     {
         Storage::fake('public');
 
+        UploadedFile::fake()->image('new_test_logo.png')->storeAs('uploads', 'new_test_logo.png', 'public');
         $setting = Setting::factory()->create(['logo' => 'new_test_logo.png']);
-        $original_file = UploadedFile::fake()->image('new_test_logo.png')->storeAs('uploads', 'new_test_logo.png', 'public');
-        Storage::disk('public')->assertExists($original_file);
+        Storage::disk('public')->assertExists('uploads/'.$setting->logo);
 
         $this->assertNotNull($setting->logo);
 
@@ -78,23 +164,19 @@ class BrandingSettingsTest extends TestCase
 
         $this->followRedirects($response)->assertSee(trans('alert-success'));
         $this->assertDatabaseHas('settings', ['logo' => null]);
-        //Storage::disk('public')->assertMissing($original_file);
+        Storage::disk('public')->assertMissing($setting->logo);
     }
 
-    public function testEmailLogoCanBeUploaded()
+    public function test_email_logo_can_be_uploaded()
     {
         Storage::fake('public');
-
-        $original_file = UploadedFile::fake()->image('before_test_email_logo.png')->storeAs('', 'before_test_email_logo.png', 'public');
-
-        Storage::disk('public')->assertExists($original_file);
-        Setting::factory()->create(['email_logo' => $original_file]);
+        Setting::factory()->create(['email_logo' => null]);
 
         $response = $this->actingAs(User::factory()->superuser()->create())
             ->from(route('settings.branding.index'))
             ->post(route('settings.branding.save',
                 [
-                    'email_logo' => UploadedFile::fake()->image('new_test_email_logo.png')->storeAs('', 'new_test_email_logo.png', 'public')
+                    'email_logo' => UploadedFile::fake()->image('new_test_email_logo.png')->storeAs('', 'new_test_email_logo.png', 'public'),
                 ]
             ))
             ->assertValid('email_logo')
@@ -104,16 +186,14 @@ class BrandingSettingsTest extends TestCase
         $this->followRedirects($response)->assertSee(trans('alert-success'));
 
         Storage::disk('public')->assertExists('new_test_email_logo.png');
-        // Storage::disk('public')->assertMissing($original_file);
     }
 
-    public function testEmailLogoCanBeDeleted()
+    public function test_email_logo_can_be_deleted()
     {
         Storage::fake('public');
-
-        $setting = Setting::factory()->create(['email_logo' => 'new_test_email_logo.png']);
-        $original_file = UploadedFile::fake()->image('new_test_email_logo.png')->storeAs('', 'new_test_email_logo.png', 'public');
-        Storage::disk('public')->assertExists($original_file);
+        UploadedFile::fake()->image('new_test_logo.png')->storeAs('uploads', 'new_test_logo.png', 'public');
+        $setting = Setting::factory()->create(['email_logo' => 'new_test_logo.png']);
+        Storage::disk('public')->assertExists('uploads/'.$setting->email_logo);
 
         $this->assertNotNull($setting->email_logo);
 
@@ -125,16 +205,16 @@ class BrandingSettingsTest extends TestCase
             ->assertValid('email_logo')
             ->assertStatus(302)
             ->assertRedirect(route('settings.index'));
+
         $setting->refresh();
         $this->followRedirects($response)->assertSee(trans('alert-success'));
         $this->assertDatabaseHas('settings', ['email_logo' => null]);
 
-        //Storage::disk('public')->assertMissing('new_test_email_logo.png');
+        Storage::disk('public')->assertMissing('new_test_email_logo.png');
 
     }
 
-
-    public function testLabelLogoCanBeUploaded()
+    public function test_label_logo_can_be_uploaded()
     {
 
         Storage::fake('public');
@@ -148,7 +228,7 @@ class BrandingSettingsTest extends TestCase
             ->from(route('settings.branding.index'))
             ->post(route('settings.branding.save',
                 [
-                    'label_logo' => UploadedFile::fake()->image('new_test_label_logo.png')->storeAs('', 'new_test_label_logo.png', 'public')
+                    'label_logo' => UploadedFile::fake()->image('new_test_label_logo.png')->storeAs('', 'new_test_label_logo.png', 'public'),
                 ]
             ))
             ->assertValid('label_logo')
@@ -160,17 +240,16 @@ class BrandingSettingsTest extends TestCase
         Storage::disk('public')->assertExists('new_test_label_logo.png');
         // Storage::disk('public')->assertMissing($original_file);
 
-
     }
 
-    public function testLabelLogoCanBeDeleted()
+    public function test_label_logo_can_be_deleted()
     {
 
         Storage::fake('public');
 
+        UploadedFile::fake()->image('new_test_label_logo.png')->storeAs('uploads', 'new_test_label_logo.png', 'public');
         $setting = Setting::factory()->create(['label_logo' => 'new_test_label_logo.png']);
-        $original_file = UploadedFile::fake()->image('new_test_label_logo.png')->storeAs('', 'new_test_label_logo.png', 'public');
-        Storage::disk('public')->assertExists($original_file);
+        Storage::disk('public')->assertExists('uploads/'.$setting->label_logo);
 
         $this->assertNotNull($setting->label_logo);
 
@@ -185,12 +264,11 @@ class BrandingSettingsTest extends TestCase
 
         $setting->refresh();
         $this->followRedirects($response)->assertSee(trans('alert-success'));
-        // $this->assertNull($setting->refresh()->logo);
-        // Storage::disk('public')->assertMissing($original_file);
+        Storage::disk('public')->assertMissing('new_test_label_logo.png');
 
     }
 
-    public function testDefaultAvatarCanBeUploaded()
+    public function test_default_avatar_can_be_uploaded()
     {
         Storage::fake('public');
 
@@ -198,7 +276,7 @@ class BrandingSettingsTest extends TestCase
             ->from(route('settings.branding.index'))
             ->post(route('settings.branding.save',
                 [
-                    'default_avatar' => UploadedFile::fake()->image('default_avatar.png')->storeAs('', 'default_avatar.png', 'public')
+                    'default_avatar' => UploadedFile::fake()->image('default_avatar.png')->storeAs('', 'default_avatar.png', 'public'),
                 ]
             ))
             ->assertValid('default_avatar')
@@ -212,7 +290,7 @@ class BrandingSettingsTest extends TestCase
         // Storage::disk('public')->assertMissing($original_file);
     }
 
-    public function testDefaultAvatarCanBeDeleted()
+    public function test_default_avatar_can_be_deleted()
     {
         Storage::fake('public');
 
@@ -233,11 +311,11 @@ class BrandingSettingsTest extends TestCase
 
         $setting->refresh();
         $this->followRedirects($response)->assertSee(trans('alert-success'));
-         // $this->assertNull($setting->refresh()->default_avatar);
+        // $this->assertNull($setting->refresh()->default_avatar);
         // Storage::disk('public')->assertMissing($original_file);
     }
 
-    public function testSnipeDefaultAvatarCanBeDeleted()
+    public function test_snipe_default_avatar_can_be_deleted()
     {
 
         $setting = Setting::getSettings()->first();
@@ -250,7 +328,6 @@ class BrandingSettingsTest extends TestCase
 
         Storage::disk('public')->assertExists('avatars/default.png');
 
-
         $this->actingAs(User::factory()->superuser()->create())
             ->post(route('settings.branding.save',
                 ['clear_default_avatar' => '1']
@@ -262,7 +339,7 @@ class BrandingSettingsTest extends TestCase
 
     }
 
-    public function testFaviconCanBeUploaded()
+    public function test_favicon_can_be_uploaded()
     {
         $this->markTestIncomplete('This fails mimetype validation on the mock');
         Storage::fake('public');
@@ -271,7 +348,7 @@ class BrandingSettingsTest extends TestCase
             ->from(route('settings.branding.index'))
             ->post(route('settings.branding.save',
                 [
-                    'favicon' =>UploadedFile::fake()->image('favicon.svg')->storeAs('', 'favicon.svg', 'public')
+                    'favicon' => UploadedFile::fake()->image('favicon.svg')->storeAs('', 'favicon.svg', 'public'),
                 ]
             ))
             ->assertValid('favicon')
@@ -283,7 +360,7 @@ class BrandingSettingsTest extends TestCase
         Storage::disk('public')->assertExists('favicon.png');
     }
 
-    public function testFaviconCanBeDeleted()
+    public function test_favicon_can_be_deleted()
     {
         $this->markTestIncomplete('This fails mimetype validation on the mock');
         Storage::fake('public');
@@ -309,7 +386,4 @@ class BrandingSettingsTest extends TestCase
         // This fails for some reason - the file is not being deleted, or at least the test doesn't think it is
         // Storage::disk('public')->assertMissing('favicon.png');
     }
-
-
-
 }

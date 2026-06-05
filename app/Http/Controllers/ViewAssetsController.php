@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Actions\CheckoutRequests\CancelCheckoutRequestAction;
 use App\Actions\CheckoutRequests\CreateCheckoutRequestAction;
+use App\Enums\ActionType;
 use App\Exceptions\AssetNotRequestable;
 use App\Models\Actionlog;
 use App\Models\Asset;
@@ -12,11 +13,13 @@ use App\Models\Setting;
 use App\Models\User;
 use App\Notifications\RequestAssetCancelation;
 use App\Notifications\RequestAssetNotification;
-use Illuminate\Auth\Access\AuthorizationException;
-use Illuminate\Http\Request;
-use Illuminate\Http\RedirectResponse;
-use \Illuminate\Contracts\View\View;
 use Exception;
+use Illuminate\Auth\Access\AuthorizationException;
+use Illuminate\Contracts\View\View;
+use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Log;
 
 /**
  * This controller handles all actions related to the ability for users
@@ -28,9 +31,6 @@ class ViewAssetsController extends Controller
 {
     /**
      * Extract custom fields that should be displayed in user view.
-     *
-     * @param User $user
-     * @return array
      */
     private function extractCustomFields(User $user): array
     {
@@ -44,16 +44,14 @@ class ViewAssetsController extends Controller
                 }
             }
         }
+
         return array_unique($fieldArray);
     }
 
     /**
      * Get list of users viewable by the current user.
-     *
-     * @param User $authUser
-     * @return \Illuminate\Support\Collection
      */
-    private function getViewableUsers(User $authUser): \Illuminate\Support\Collection
+    private function getViewableUsers(User $authUser): Collection
     {
         // SuperAdmin sees all users
         if ($authUser->isSuperUser()) {
@@ -66,49 +64,43 @@ class ViewAssetsController extends Controller
 
         // Regular manager sees only their subordinates + self
         $managedUsers = $authUser->getAllSubordinates();
-        
+
         // If user has subordinates, show them with self at beginning
         if ($managedUsers->count() > 0) {
             return collect([$authUser])->merge($managedUsers)
                 ->sortBy('last_name')
                 ->sortBy('first_name');
         }
-        
+
         // User has no subordinates, only sees themselves
         return collect([$authUser]);
     }
 
     /**
      * Get the selected user ID from request or default to current user.
-     *
-     * @param Request $request
-     * @param \Illuminate\Support\Collection $subordinates
-     * @param int $defaultUserId
-     * @return int
      */
-    private function getSelectedUserId(Request $request, \Illuminate\Support\Collection $subordinates, int $defaultUserId): int
+    private function getSelectedUserId(Request $request, Collection $subordinates, int $defaultUserId): int
     {
         // If no subordinates or no user_id in request, return default
-        if ($subordinates->count() <= 1 || !$request->filled('user_id')) {
+        if ($subordinates->count() <= 1 || ! $request->filled('user_id')) {
             return $defaultUserId;
         }
 
         $requestedUserId = (int) $request->input('user_id');
-        
+
         // Validate if the requested user is allowed
         if ($subordinates->contains('id', $requestedUserId)) {
             return $requestedUserId;
         }
-        
+
         // If invalid ID or not authorized, return default
         return $defaultUserId;
     }
 
     /**
      * Show user's assigned assets with optional manager view functionality.
-     *
      */
-    public function getIndex(Request $request) : View | RedirectResponse
+    public function getIndex(Request $request): View|RedirectResponse
     {
         $authUser = auth()->user();
         $settings = Setting::getSettings();
@@ -128,11 +120,12 @@ class ViewAssetsController extends Controller
             'assets.model.fieldset.fields',
             'consumables',
             'accessories',
-            'licenses'
+            'licenses',
+            'companies',
         ])->find($selectedUserId);
 
         // If the user to view couldn't be found (shouldn't happen with proper logic), redirect with error
-        if (!$userToView) {
+        if (! $userToView) {
             return redirect()->route('view-assets')->with('error', trans('admin/users/message.user_not_found'));
         }
 
@@ -145,17 +138,27 @@ class ViewAssetsController extends Controller
             'field_array' => $fieldArray,
             'settings' => $settings,
             'subordinates' => $subordinates,
-            'selectedUserId' => $selectedUserId
+            'selectedUserId' => $selectedUserId,
         ]);
     }
 
     /**
      * Returns view of requestable items for a user.
      */
-    public function getRequestableIndex() : View
+    public function getRequestableIndex(): View
     {
         $assets = Asset::with('model', 'defaultLoc', 'location', 'assignedTo', 'requests')->Hardware()->RequestableAssets();
-        $models = AssetModel::with('category', 'requests', 'assets')->RequestableModels()->get();
+        $models = AssetModel::with([
+            'category',
+            'requests',
+            'assets' => function ($q) {
+                $q->where('requestable', 1)
+                    ->whereHas('status', fn ($s) => $s->where('archived', 0)
+                        ->where(fn ($s) => $s->where('deployable', 1)->orWhere('pending', 1)
+                        )
+                    );
+            },
+        ])->RequestableModels()->get();
 
         return view('account/requestable-assets', compact('assets', 'models'));
     }
@@ -172,7 +175,7 @@ class ViewAssetsController extends Controller
 
         $user = auth()->user();
 
-        $logaction = new Actionlog();
+        $logaction = new Actionlog;
         $logaction->item_id = $data['asset_id'] = $item->id;
         $logaction->item_type = $fullItemType;
         $logaction->created_at = $data['requested_date'] = date('Y-m-d H:i:s');
@@ -185,7 +188,7 @@ class ViewAssetsController extends Controller
         $logaction->target_type = User::class;
 
         $data['item_quantity'] = $request->has('request-quantity') ? e($request->input('request-quantity')) : 1;
-        $data['requested_by'] = $user->present()->fullName();
+        $data['requested_by'] = $user->display_name;
         $data['item'] = $item;
         $data['item_type'] = $itemType;
         $data['target'] = auth()->user();
@@ -193,26 +196,44 @@ class ViewAssetsController extends Controller
         if ($fullItemType == Asset::class) {
             $data['item_url'] = route('hardware.show', $item->id);
         } else {
-            $data['item_url'] = route("view/${itemType}", $item->id);
+            $data['item_url'] = route("view/{$itemType}", $item->id);
         }
 
         $settings = Setting::getSettings();
 
-        if (($item_request = $item->isRequestedBy($user)) || $cancel_by_admin) {
-            $item->cancelRequest($requestingUser);
+        $is_admin = $user->isSuperUser() || $user->isAdmin();
+
+        if ($cancel_by_admin && ! $is_admin) {
+            return redirect()->back()->with('error', trans('general.insufficient_permissions'));
+        }
+
+        if (($item_request = $item->isRequestedBy($user)) || ($is_admin && $cancel_by_admin)) {
+            $item->cancelRequest($is_admin && $cancel_by_admin ? $requestingUser : null);
             $data['item_quantity'] = ($item_request) ? $item_request->qty : 1;
-            $logaction->logaction('request_canceled');
+            $logaction->logaction(ActionType::RequestCanceled);
 
             if (($settings->alert_email != '') && ($settings->alerts_enabled == '1') && (! config('app.lock_passwords'))) {
-                $settings->notify(new RequestAssetCancelation($data));
+                try {
+                    $settings->notify((new RequestAssetCancelation($data))->locale($settings->locale));
+                } catch (Exception $e) {
+                    Log::warning('Could not send request cancellation notification: '.$e->getMessage());
+                }
             }
 
             return redirect()->back()->with('success')->with('success', trans('admin/hardware/message.requests.canceled'));
         } else {
+            if ($fullItemType === Asset::class && is_null(Asset::RequestableAssets()->find($item->id))) {
+                return redirect()->back()->with('error', trans('admin/hardware/message.requests.error'));
+            }
+
             $item->request();
             if (($settings->alert_email != '') && ($settings->alerts_enabled == '1') && (! config('app.lock_passwords'))) {
                 $logaction->logaction('requested');
-                $settings->notify(new RequestAssetNotification($data));
+                try {
+                    $settings->notify((new RequestAssetNotification($data))->locale($settings->locale));
+                } catch (Exception $e) {
+                    Log::warning('Could not send asset request notification: '.$e->getMessage());
+                }
             }
 
             return redirect()->route('requestable-assets')->with('success')->with('success', trans('admin/hardware/message.requests.success'));
@@ -221,12 +242,14 @@ class ViewAssetsController extends Controller
 
     /**
      * Process a specific requested asset
-     * @param null $assetId
+     *
+     * @param  null  $assetId
      */
     public function store(Asset $asset): RedirectResponse
     {
         try {
             CreateCheckoutRequestAction::run($asset, auth()->user());
+
             return redirect()->route('requestable-assets')->with('success')->with('success', trans('admin/hardware/message.requests.success'));
         } catch (AssetNotRequestable $e) {
             return redirect()->back()->with('error', 'Asset is not requestable');
@@ -234,6 +257,7 @@ class ViewAssetsController extends Controller
             return redirect()->back()->with('error', trans('admin/hardware/message.requests.error'));
         } catch (Exception $e) {
             report($e);
+
             return redirect()->back()->with('error', trans('general.something_went_wrong'));
         }
     }
@@ -242,15 +266,16 @@ class ViewAssetsController extends Controller
     {
         try {
             CancelCheckoutRequestAction::run($asset, auth()->user());
+
             return redirect()->route('requestable-assets')->with('success')->with('success', trans('admin/hardware/message.requests.canceled'));
         } catch (Exception $e) {
             report($e);
+
             return redirect()->back()->with('error', trans('general.something_went_wrong'));
         }
     }
 
-
-    public function getRequestedAssets() : View
+    public function getRequestedAssets(): View
     {
         return view('account/requested');
     }

@@ -3,7 +3,7 @@
 <head>
     <meta http-equiv="Content-Type" content="text/html; charset=utf-8"/>
     @if ((isset($users) && count($users) === 1))
-        <title>{{ trans('general.assigned_to', ['name' => $users[0]->present()->fullName()]) }} - {{ date('Y-m-d H:i', time()) }}</title>
+        <title>{{ trans('general.assigned_to', ['name' => $users[0]->display_name]) }} - {{ date('Y-m-d H:i', time()) }}</title>
     @else
         <title>{{ trans('admin/users/general.print_assigned') }} - {{ date('Y-m-d H:i', time()) }}</title>
     @endisset
@@ -45,14 +45,24 @@
             margin-top: 20px;
             margin-bottom: 10px;
         }
+
+        @media print {
+            .signature-boxes {
+                page-break-after: always;
+            }
+        }
     </style>
 
 
 </head>
 <body>
 
+@php
+    $count = 0;
+@endphp
 {{-- If we are rendering multiple users we'll add the ability to show/hide EULAs for all of them at once via this button --}}
 @if (count($users) > 1)
+
     <div class="pull-right hidden-print">
         <span>{{ trans('general.show_or_hide_eulas') }}</span>
         <button class="btn btn-default" type="button" data-toggle="collapse" data-target=".eula-row" aria-expanded="false" aria-controls="eula-row" title="EULAs">
@@ -66,13 +76,13 @@
 
         <h2>
             @if ($snipeSettings->acceptance_pdf_logo!='')
-                <img class="print-logo" src="{{ config('app.url') }}/uploads/{{ $snipeSettings->acceptance_pdf_logo }}">
+                <img class="print-logo" src="{{ Storage::disk('public')->url($snipeSettings->acceptance_pdf_logo) }}">
             @endif
             {{ $snipeSettings->site_name }}
         </h2>
     @elseif ($snipeSettings->brand == '2')
         @if ($snipeSettings->acceptance_pdf_logo!='')
-            <img class="print-logo" src="{{ config('app.url') }}/uploads/{{ $snipeSettings->acceptance_pdf_logo }}">
+            <img class="print-logo" src="{{ Storage::disk('public')->url($snipeSettings->acceptance_pdf_logo) }}">
         @endif
     @else
         <h2>{{ $snipeSettings->site_name }}</h2>
@@ -80,13 +90,16 @@
 @endif
 
 @foreach ($users as $show_user)
+    @php
+        $count++;
+    @endphp
     <div id="start_of_user_section"> {{-- used for page breaks when printing --}}</div>
     <h3>
         @if ($show_user->company)
-            <b>{{ trans('admin/companies/table.name') }}:</b> {{ $show_user->company->name }}</b>
+            <b>{{ trans('admin/companies/table.name') }}:</b> {{ $show_user->company->name }}
         <br>
         @endif
-        {{ trans('general.assigned_to', ['name' => $show_user->present()->fullName()]) }}
+        {{ trans('general.assigned_to', ['name' => $show_user->display_name]) }}
         {{ ($show_user->employee_num!='') ? ' (#'.$show_user->employee_num.') ' : '' }}
         {{ ($show_user->jobtitle!='' ? ' - '.$show_user->jobtitle : '') }}
     </h3>
@@ -155,39 +168,6 @@
                         @endif
                     </td>
                 </tr>
-                @if ($settings->show_assigned_assets)
-                    @php
-                        $assignedCounter = 1;
-                    @endphp
-                    @foreach ($asset->assignedAssets as $asset)
-                        <tr>
-                            <td>{{ $counter }}.{{ $assignedCounter }}</td>
-                            <td>
-                                @if ($asset->getImageUrl())
-                                    <img src="{{ $asset->getImageUrl() }}" class="thumbnail" style="max-height: 50px;">
-                                @endif
-                            </td>
-                            <td>{{ $asset->asset_tag }}</td>
-                            <td>{{ $asset->name }}</td>
-                            <td>{{ (($asset->model) && ($asset->model->category)) ? $asset->model->category->name : trans('general.invalid_category') }}</td>
-                            <td>{{ ($asset->model) ? $asset->model->name : trans('general.invalid_model') }}</td>
-                            <td>{{ ($asset->defaultLoc) ? $asset->defaultLoc->name : '' }}</td>
-                            <td>{{ ($asset->location) ? $asset->location->name : '' }}</td>
-                            <td>{{ $asset->serial }}</td>
-                            <td>
-                                {{ Helper::getFormattedDateObject($asset->last_checkout, 'datetime', false) }}
-                            </td>
-                            <td>
-                                @if ($asset->getLatestSignedAcceptance($show_user))
-                                    <img style="width:auto;height:100px;" src="{{ asset('/') }}display-sig/{{ $asset->getLatestSignedAcceptance($show_user)->accept_signature }}">
-                                @endif
-                            </td>
-                        </tr>
-                        @php
-                            $assignedCounter++
-                        @endphp
-                    @endforeach
-                @endif
                 @php
                     $counter++
                 @endphp
@@ -227,7 +207,7 @@
                 $lcounter = 1;
             @endphp
 
-            @foreach ($show_user->licenses as $license)
+            @foreach ($show_user->directLicenses as $license)
                 @php
                     if (($license->category) && ($license->category->getEula())) $eulas[] = $license->category->getEula()
                 @endphp
@@ -385,7 +365,95 @@
             @endforeach
         </table>
     @endif
+    @if(($indirectItemsCount ?? 0) > 0 && $settings->show_assigned_assets)
+        <div id="indirect-assignments-toolbar">
+            <h4>{{ $indirectItemsCount.' '.trans('mail.assigned_to_assets') }}</h4>
+        </div>
+        <table
+                class="snipe-table table table-striped inventory"
+                id="indirect-assignments"
+                data-pagination="false"
+                data-toolbar="#indirect-assignments-toolbar"
+                data-id-table="indirect-assignments"
+                data-search="false"
+                data-side-pagination="client"
+                data-sortable="true"
+                data-sort-order="desc"
+                data-sort-name="name"
+                data-show-columns="true"
+                data-cookie-id-table="indirect-assignments">
+            <thead>
+            @php
+                $indirectAssignmentsCounter = 1;
+            @endphp
+                <tr>
+                    <th style="width: 20px;" data-sortable="false" data-switchable="false">#</th>
+                    <th style="width: 40%;" data-sortable="true" data-switchable="false">{{ trans('mail.assigned_to') }}</th>
+                    <th style="width: 50%;" data-sortable="true">{{ trans('general.category') }}</th>
+                    <th style="width: 10%;" data-sortable="true">{{ trans('mail.item') }}</th>
+                    <th style="width: 10%;" data-sortable="true">{{ trans('general.quantity') }}</th>
+                </tr>
+            </thead>
 
+            @foreach ($show_user->assets as $asset)
+                @foreach ($asset->assignedAssets as $indirectAsset)
+                    <tr>
+                        <td>{{ $indirectAssignmentsCounter }}</td>
+                        <td>{{ $asset->display_name ?? ''}}</td>
+                        <td>{{ (($indirectAsset->model) && ($indirectAsset->model->category)) ? $indirectAsset->model->category->name : trans('general.invalid_category') }}</td>
+                        <td>{{ $indirectAsset->display_name ?? '' }}</td>
+                        <td>1</td>
+
+                    </tr>
+                    @php
+                        $indirectAssignmentsCounter++
+                    @endphp
+                @endforeach
+                @foreach ($asset->licenses as $indirectLicense)
+                    @if($indirectLicense)
+                        <tr>
+                            <td>{{$indirectAssignmentsCounter}}</td>
+                            <td>{{ $asset->display_name ?? ''}}</td>
+                            <td>{{ $indirectLicense->category?->name ?? '' }}</td>
+                            <td>{{ $indirectLicense->name ?? '' }}</td>
+                            <td>1</td>
+                        </tr>
+                    @endif
+                    @php
+                    $indirectAssignmentsCounter ++
+                    @endphp
+                @endforeach
+                @foreach ($asset->components as $component)
+                    @if($component)
+                        <tr>
+                            <td>{{$indirectAssignmentsCounter}}</td>
+                            <td>{{ $asset->display_name ?? ''}}</td>
+                            <td>{{ $component->category?->name ?? '' }}</td>
+                            <td>{{ $component->name ?? '' }}</td>
+                            <td>{{ $component->pivot->assigned_qty }}</td>
+                        </tr>
+                    @endif
+                    @php
+                        $indirectAssignmentsCounter ++
+                    @endphp
+                @endforeach
+                @foreach ($asset->assignedAccessories as $indirectAccessory)
+                    @if($indirectAccessory)
+                        <tr>
+                            <td>{{$indirectAssignmentsCounter}}</td>
+                            <td>{{ $asset->display_name ?? '' }}</td>
+                            <td>{{ $indirectAccessory->accessory->category?->name ?? '' }}</td>
+                            <td>{{ $indirectAccessory->accessory->name ?? '' }}</td>
+                            <td>1</td>
+                        </tr>
+                    @endif
+                    @php
+                        $indirectAssignmentsCounter ++
+                    @endphp
+                @endforeach
+            @endforeach
+        </table>
+    @endif
     @php
         if (!empty($eulas)) $eulas = array_unique($eulas);
     @endphp
@@ -399,7 +467,7 @@
         </div>
     @endif
 
-    <table style="margin-top: 80px;">
+    <table style="margin-top: 80px;" class="{{ count($users) > $count ? 'signature-boxes' : ''  }}">
         @if (!empty($eulas))
         <tr class="collapse eula-row">
             <td style="padding-right: 10px; vertical-align: top; font-weight: bold;">EULA</td>
@@ -515,7 +583,7 @@
             },
             exportOptions: export_options,
 
-            exportTypes: ['xlsx', 'excel', 'csv', 'pdf','json', 'xml', 'txt', 'sql', 'doc' ],
+            exportTypes: ['xlsx', 'csv', 'pdf', 'json', 'xml', 'txt', 'sql', 'doc'],
             onLoadSuccess: function () {
                 $('[data-tooltip="true"]').tooltip(); // Needed to attach tooltips after ajax call
             }

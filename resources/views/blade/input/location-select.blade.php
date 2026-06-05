@@ -9,7 +9,17 @@
     'multiple' => false,
     'helpText' => null,
     'hideNewButton' => false,
+    'companyId' => null,
 ])
+
+@php
+    $id = $name . '_location_select';
+
+    // User provided id, overwrite the default
+    if ($attributes->has('id')) {
+        $id = $attributes->get('id');
+    }
+@endphp
 
 <div
     @class([
@@ -26,17 +36,21 @@
             data-placeholder="{{ trans('general.select_location') }}"
             name="{{ $name }}"
             style="width: 100%"
-            id="{{ $name }}_location_select"
+            id="{{ $id }}"
             aria-label="{{ $name }}"
             @required($required)
             @if ($multiple)
                 multiple
             @endif
+            @if ($companyId)
+                data-company-id="{{ $companyId }}"
+            @endif
         >
+            <option value=""></option>
             @if ($selected)
-                @foreach(Arr::wrap($selected) as $id)
-                    <option value="{{ $id }}" selected="selected" role="option" aria-selected="true"  role="option">
-                        {{ optional(Location::find($id))->name }}
+                @foreach(Arr::wrap($selected) as $value)
+                    <option value="{{ $value }}" selected="selected" role="option" aria-selected="true"  role="option">
+                        {{ Location::find($value)?->name }}
                     </option>
                 @endforeach
             @endif
@@ -46,7 +60,7 @@
     <div class="col-md-1 col-sm-1 text-left">
         @unless($hideNewButton)
             @can('create', Location::class)
-                <a href='{{ route('modal.show', 'location') }}' data-toggle="modal" data-target="#createModal" data-select='{{ $name }}_location_select' class="btn btn-sm btn-primary">{{ trans('button.new') }}</a>
+                <a href='{{ route('modal.show', 'location') }}' data-toggle="modal" data-target="#createModal" data-select='{{ $name }}_location_select' class="btn btn-sm btn-theme">{{ trans('button.new') }}</a>
             @endcan
         @endunless
     </div>

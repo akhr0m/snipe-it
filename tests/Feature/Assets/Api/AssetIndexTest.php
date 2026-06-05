@@ -4,6 +4,7 @@ namespace Tests\Feature\Assets\Api;
 
 use App\Models\Asset;
 use App\Models\Company;
+use App\Models\CustomField;
 use App\Models\User;
 use Carbon\Carbon;
 use Illuminate\Testing\Fluent\AssertableJson;
@@ -11,7 +12,7 @@ use Tests\TestCase;
 
 class AssetIndexTest extends TestCase
 {
-    public function testAssetApiIndexReturnsExpectedAssets()
+    public function test_asset_api_index_returns_expected_assets()
     {
         Asset::factory()->count(3)->create();
 
@@ -28,29 +29,28 @@ class AssetIndexTest extends TestCase
                 'total',
                 'rows',
             ])
-            ->assertJson(fn(AssertableJson $json) => $json->has('rows', 3)->etc());
+            ->assertJson(fn (AssertableJson $json) => $json->has('rows', 3)->etc());
     }
 
-    public function testAssetApiIndexReturnsDisplayUpcomingAuditsDue()
+    public function test_asset_api_index_returns_display_upcoming_audits_due()
     {
         Asset::factory()->count(3)->create(['next_audit_date' => Carbon::now()->format('Y-m-d')]);
-
 
         $this->actingAsForApi(User::factory()->superuser()->create())
             ->getJson(
                 route('api.assets.list-upcoming', ['action' => 'audits', 'upcoming_status' => 'due']))
-                ->assertOk()
-                ->assertJsonStructure([
-                    'total',
-                    'rows',
-                ])
-            ->assertJson(fn(AssertableJson $json) => $json->has('rows', 3)->etc());
+            ->assertOk()
+            ->assertJsonStructure([
+                'total',
+                'rows',
+            ])
+            ->assertJson(fn (AssertableJson $json) => $json->has('rows', 3)->etc());
     }
 
-    public function testAssetApiIndexReturnsOverdueForAudit()
+    public function test_asset_api_index_returns_overdue_for_audit()
     {
         Asset::factory()->count(3)->create(['next_audit_date' => Carbon::now()->subDays(1)->format('Y-m-d')]);
-        
+
         $this->actingAsForApi(User::factory()->superuser()->create())
             ->getJson(
                 route('api.assets.list-upcoming', ['action' => 'audits', 'upcoming_status' => 'overdue']))
@@ -59,15 +59,14 @@ class AssetIndexTest extends TestCase
                 'total',
                 'rows',
             ])
-            ->assertJson(fn(AssertableJson $json) => $json->has('rows', 3)->etc());
+            ->assertJson(fn (AssertableJson $json) => $json->has('rows', 3)->etc());
     }
 
-
-    public function testAssetApiIndexReturnsDueOrOverdueForAudit()
+    public function test_asset_api_index_returns_due_or_overdue_for_audit()
     {
         Asset::factory()->count(3)->create(['next_audit_date' => Carbon::now()->format('Y-m-d')]);
         Asset::factory()->count(2)->create(['next_audit_date' => Carbon::now()->subDays(1)->format('Y-m-d')]);
-        
+
         $this->actingAsForApi(User::factory()->superuser()->create())
             ->getJson(
                 route('api.assets.list-upcoming', ['action' => 'audits', 'upcoming_status' => 'due-or-overdue']))
@@ -76,15 +75,13 @@ class AssetIndexTest extends TestCase
                 'total',
                 'rows',
             ])
-            ->assertJson(fn(AssertableJson $json) => $json->has('rows', 5)->etc());
+            ->assertJson(fn (AssertableJson $json) => $json->has('rows', 5)->etc());
     }
 
-
-
-    public function testAssetApiIndexReturnsDueForExpectedCheckin()
+    public function test_asset_api_index_returns_due_for_expected_checkin()
     {
         Asset::factory()->count(3)->create(['assigned_to' => '1', 'assigned_type' => User::class, 'expected_checkin' => Carbon::now()->format('Y-m-d')]);
-        
+
         $this->actingAsForApi(User::factory()->superuser()->create())
             ->getJson(
                 route('api.assets.list-upcoming', ['action' => 'checkins', 'upcoming_status' => 'due'])
@@ -93,14 +90,14 @@ class AssetIndexTest extends TestCase
             ->assertJsonStructure([
                 'total',
                 'rows',
-        ])
-        ->assertJson(fn(AssertableJson $json) => $json->has('rows', 3)->etc());
+            ])
+            ->assertJson(fn (AssertableJson $json) => $json->has('rows', 3)->etc());
     }
 
-    public function testAssetApiIndexReturnsOverdueForExpectedCheckin()
+    public function test_asset_api_index_returns_overdue_for_expected_checkin()
     {
         Asset::factory()->count(3)->create(['assigned_to' => '1', 'assigned_type' => User::class, 'expected_checkin' => Carbon::now()->subDays(1)->format('Y-m-d')]);
-        
+
         $this->actingAsForApi(User::factory()->superuser()->create())
             ->getJson(route('api.assets.list-upcoming', ['action' => 'checkins', 'upcoming_status' => 'overdue']))
             ->assertOk()
@@ -108,14 +105,14 @@ class AssetIndexTest extends TestCase
                 'total',
                 'rows',
             ])
-            ->assertJson(fn(AssertableJson $json) => $json->has('rows', 3)->etc());
+            ->assertJson(fn (AssertableJson $json) => $json->has('rows', 3)->etc());
     }
 
-    public function testAssetApiIndexReturnsDueOrOverdueForExpectedCheckin()
+    public function test_asset_api_index_returns_due_or_overdue_for_expected_checkin()
     {
         Asset::factory()->count(3)->create(['assigned_to' => '1', 'assigned_type' => User::class, 'expected_checkin' => Carbon::now()->subDays(1)->format('Y-m-d')]);
         Asset::factory()->count(2)->create(['assigned_to' => '1', 'assigned_type' => User::class, 'expected_checkin' => Carbon::now()->format('Y-m-d')]);
-        
+
         $this->actingAsForApi(User::factory()->superuser()->create())
             ->getJson(route('api.assets.list-upcoming', ['action' => 'checkins', 'upcoming_status' => 'due-or-overdue']))
             ->assertOk()
@@ -123,10 +120,10 @@ class AssetIndexTest extends TestCase
                 'total',
                 'rows',
             ])
-            ->assertJson(fn(AssertableJson $json) => $json->has('rows', 5)->etc());
+            ->assertJson(fn (AssertableJson $json) => $json->has('rows', 5)->etc());
     }
 
-    public function testAssetApiIndexAdheresToCompanyScoping()
+    public function test_asset_api_index_adheres_to_company_scoping()
     {
         [$companyA, $companyB] = Company::factory()->count(2)->create();
 
@@ -170,5 +167,55 @@ class AssetIndexTest extends TestCase
             ->getJson(route('api.assets.index'))
             ->assertResponseDoesNotContainInRows($assetA, 'asset_tag')
             ->assertResponseContainsInRows($assetB, 'asset_tag');
+    }
+
+    public function test_assets_can_be_filtered_by_custom_field()
+    {
+        $field = CustomField::factory()->create();
+
+        $matchingAssets = Asset::factory()->count(3)->hasMultipleCustomFields([$field])->create();
+        foreach ($matchingAssets as $asset) {
+            $asset->{$field->db_column_name()} = 'target-value';
+            $asset->save();
+        }
+
+        // These assets have a null value for the custom field column and should not be returned
+        Asset::factory()->count(2)->create();
+
+        $this->actingAsForApi(User::factory()->superuser()->create())
+            ->getJson(route('api.assets.index', [
+                $field->db_column_name() => 'target-value',
+            ]))
+            ->assertOk()
+            ->assertJson(fn (AssertableJson $json) => $json->has('rows', 3)->etc());
+    }
+
+    public function test_gracefully_handles_malformed_filter()
+    {
+        $this->actingAsForApi(User::factory()->viewAssets()->create())
+            ->getJson(route('api.assets.index', [
+                // filter should be a json encoded array and not a string
+                'filter' => 'asset_tag:12345',
+            ]))
+            ->assertStatusMessageIs('error')
+            ->assertJson(function (AssertableJson $json) {
+                $json->has('messages.filter')->etc();
+            });
+    }
+
+    public function test_returns_result_via_filter()
+    {
+
+        Asset::factory()->count(3)->create(['name' => 'MY AWESOME ASSET NAME']);
+        $this->actingAsForApi(User::factory()->viewAssets()->create())
+            ->getJson(route('api.assets.index', [
+                'filter' => '{"name":"MY AWESOME ASSET NAME"}',
+            ]))
+            ->assertOk()
+            ->assertJsonStructure([
+                'total',
+                'rows',
+            ])
+            ->assertJson(fn (AssertableJson $json) => $json->has('rows', 3)->etc());
     }
 }

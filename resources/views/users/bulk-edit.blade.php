@@ -7,7 +7,7 @@
 
 
 @section('header_right')
-    <a href="{{ URL::previous() }}" class="btn btn-sm btn-primary pull-right">
+    <a href="{{ URL::previous() }}" class="btn btn-sm btn-theme pull-right">
         {{ trans('general.back') }}</a>
 @stop
 
@@ -64,13 +64,13 @@
 
                         <!-- Company -->
                         @if (\App\Models\Company::canManageUsersCompanies())
-                            @include ('partials.forms.edit.company-select', ['translated_name' => trans('general.select_company'), 'fieldname' => 'company_id'])
+                            @include ('partials.forms.edit.company-select', ['translated_name' => trans('general.select_company'), 'fieldname' => 'company_ids', 'multiple' => 'true'])
 
                             <div class="form-group">
                                 <div class=" col-md-9 col-md-offset-3">
                                     <label class="form-control">
-                                        <input type="checkbox" name="null_company_id" value="1" />
-                                        {{ trans_choice('general.set_users_field_to_null', count($users), ['field' => trans('general.company'), 'user_count' => count($users)]) }}
+                                        <input type="checkbox" name="null_company_ids" value="1" />
+                                        {{ trans_choice('general.set_users_field_to_null', count($users), ['field' => trans('general.companies'), 'user_count' => count($users)]) }}
                                     </label>
                                 </div>
                             </div>
@@ -117,6 +117,152 @@
                             </div>
                         </div>
 
+                        <div class="form-group">
+                            <div class=" col-md-9 col-md-offset-3">
+                                <label class="form-control">
+                                    <input type="checkbox" name="null_city" value="1" />
+                                    {{ trans_choice('general.set_users_field_to_null', count($users), ['field' => trans('general.city'), 'user_count' => count($users)]) }}
+                                </label>
+                            </div>
+                        </div>
+
+                        <!-- State -->
+                        <div class="form-group{{ $errors->has('state') ? ' has-error' : '' }}">
+                            <label class="col-md-3 control-label" for="state">{{ trans('general.state') }}</label>
+                            <div class="col-md-4">
+                                <input class="form-control" type="text" name="state" id="state" aria-label="state" maxlength="191" />
+                                {!! $errors->first('state', '<span class="alert-msg" aria-hidden="true">:message</span>') !!}
+                            </div>
+                        </div>
+
+                        <div class="form-group">
+                            <div class=" col-md-9 col-md-offset-3">
+                                <label class="form-control">
+                                    <input type="checkbox" name="null_state" value="1" />
+                                    {{ trans_choice('general.set_users_field_to_null', count($users), ['field' => trans('general.state'), 'user_count' => count($users)]) }}
+                                </label>
+                            </div>
+                        </div>
+
+                        <!-- Country -->
+                        <div class="form-group{{ $errors->has('country') ? ' has-error' : '' }}">
+                            <label class="col-md-3 control-label" for="country">{{ trans('general.country') }}</label>
+                            <div class="col-md-4">
+                                <x-input.country-select name="country" :selected="old('country', '')" />
+                                {!! $errors->first('country', '<span class="alert-msg" aria-hidden="true">:message</span>') !!}
+                            </div>
+                        </div>
+
+                        <div class="form-group">
+                            <div class=" col-md-9 col-md-offset-3">
+                                <label class="form-control">
+                                    <input type="checkbox" name="null_country" value="1" />
+                                    {{ trans_choice('general.set_users_field_to_null', count($users), ['field' => trans('general.country'), 'user_count' => count($users)]) }}
+                                </label>
+                            </div>
+                        </div>
+
+                        <!-- Zip -->
+                        <div class="form-group{{ $errors->has('zip') ? ' has-error' : '' }}">
+                            <label class="col-md-3 control-label" for="zip">{{ trans('general.zip') }}</label>
+                            <div class="col-md-4">
+                                <input class="form-control" type="text" name="zip" id="zip" aria-label="zip" maxlength="10" />
+                                {!! $errors->first('zip', '<span class="alert-msg" aria-hidden="true">:message</span>') !!}
+                            </div>
+                        </div>
+
+                        <div class="form-group">
+                            <div class=" col-md-9 col-md-offset-3">
+                                <label class="form-control">
+                                    <input type="checkbox" name="null_zip" value="1" />
+                                    {{ trans_choice('general.set_users_field_to_null', count($users), ['field' => trans('general.zip'), 'user_count' => count($users)]) }}
+                                </label>
+                            </div>
+                        </div>
+
+                        <!-- Address -->
+                        <div class="form-group{{ $errors->has('address') ? ' has-error' : '' }}">
+                            <label class="col-md-3 control-label" for="address">{{ trans('general.address') }}</label>
+                            <div class="col-md-4">
+                                <input class="form-control" type="text" name="address" id="address" aria-label="address" maxlength="191" />
+                                {!! $errors->first('address', '<span class="alert-msg" aria-hidden="true">:message</span>') !!}
+                            </div>
+                        </div>
+
+                        <div class="form-group">
+                            <div class=" col-md-9 col-md-offset-3">
+                                <label class="form-control">
+                                    <input type="checkbox" name="null_address" value="1" />
+                                    {{ trans_choice('general.set_users_field_to_null', count($users), ['field' => trans('general.address'), 'user_count' => count($users)]) }}
+                                </label>
+                            </div>
+                        </div>
+
+                        <!-- Phone -->
+                        <div class="form-group{{ $errors->has('phone') ? ' has-error' : '' }}">
+                            <label class="col-md-3 control-label" for="phone">{{ trans('admin/users/table.phone') }}</label>
+                            <div class="col-md-4">
+                                <input class="form-control" type="text" name="phone" id="phone" aria-label="phone" maxlength="191" />
+                                {!! $errors->first('phone', '<span class="alert-msg" aria-hidden="true">:message</span>') !!}
+                            </div>
+                        </div>
+
+                        <div class="form-group">
+                            <div class=" col-md-9 col-md-offset-3">
+                                <label class="form-control">
+                                    <input type="checkbox" name="null_phone" value="1" />
+                                    {{ trans_choice('general.set_users_field_to_null', count($users), ['field' => trans('admin/users/table.phone'), 'user_count' => count($users)]) }}
+                                </label>
+                            </div>
+                        </div>
+
+                        <!-- Job Title -->
+                        <div class="form-group{{ $errors->has('jobtitle') ? ' has-error' : '' }}">
+                            <label class="col-md-3 control-label" for="jobtitle">{{ trans('admin/users/table.title') }}</label>
+                            <div class="col-md-4">
+                                <input class="form-control" type="text" name="jobtitle" id="jobtitle" aria-label="jobtitle" maxlength="191" />
+                                {!! $errors->first('jobtitle', '<span class="alert-msg" aria-hidden="true">:message</span>') !!}
+                            </div>
+                        </div>
+
+                        <div class="form-group">
+                            <div class=" col-md-9 col-md-offset-3">
+                                <label class="form-control">
+                                    <input type="checkbox" name="null_jobtitle" value="1" />
+                                    {{ trans_choice('general.set_users_field_to_null', count($users), ['field' => trans('admin/users/table.title'), 'user_count' => count($users)]) }}
+                                </label>
+                            </div>
+                        </div>
+
+                        <!-- Employee Number (clear only — employee numbers are unique per user) -->
+                        <div class="form-group">
+                            <label class="col-md-3 control-label">{{ trans('general.employee_number') }}</label>
+                            <div class=" col-md-9">
+                                <label class="form-control">
+                                    <input type="checkbox" name="null_employee_num" value="1" />
+                                    {{ trans_choice('general.set_users_field_to_null', count($users), ['field' => trans('general.employee_number'), 'user_count' => count($users)]) }}
+                                </label>
+                            </div>
+                        </div>
+
+                        <!-- Website -->
+                        <div class="form-group{{ $errors->has('website') ? ' has-error' : '' }}">
+                            <label class="col-md-3 control-label" for="website">{{ trans('general.website') }}</label>
+                            <div class="col-md-4">
+                                <input class="form-control" type="url" name="website" id="website" aria-label="website" maxlength="191" />
+                                {!! $errors->first('website', '<span class="alert-msg" aria-hidden="true">:message</span>') !!}
+                            </div>
+                        </div>
+
+                        <div class="form-group">
+                            <div class=" col-md-9 col-md-offset-3">
+                                <label class="form-control">
+                                    <input type="checkbox" name="null_website" value="1" />
+                                    {{ trans_choice('general.set_users_field_to_null', count($users), ['field' => trans('general.website'), 'user_count' => count($users)]) }}
+                                </label>
+                            </div>
+                        </div>
+
                          <!-- remote -->
                          <div class="form-group">
                             <div class="col-sm-3 control-label">
@@ -159,6 +305,7 @@
                                         <input type="radio" name="ldap_import" id="ldap_import" value="1" aria-label="ldap_import">
                                         {{ trans('general.user_managed_passwords_disallow') }}
                                     </label>
+                                    <p class="help-block">{{ trans('general.user_managed_passwords_bulk_help') }}</p>
                             </div>
                         </div> <!--/form-group-->
 
@@ -209,12 +356,30 @@
                         </div> <!--/form-group-->
 
 
+                        <!-- Email (auth-sensitive: only applied to users the acting user can edit) -->
+                        <div class="form-group{{ $errors->has('email') ? ' has-error' : '' }}">
+                            <label class="col-md-3 control-label" for="email">{{ trans('admin/users/table.email') }}</label>
+                            <div class="col-md-4">
+                                <input class="form-control" type="email" name="email" id="email" aria-label="email" maxlength="191" />
+                                {!! $errors->first('email', '<span class="alert-msg" aria-hidden="true">:message</span>') !!}
+                            </div>
+                        </div>
+
+                        <div class="form-group">
+                            <div class=" col-md-9 col-md-offset-3">
+                                <label class="form-control">
+                                    <input type="checkbox" name="null_email" value="1" />
+                                    {{ trans_choice('general.set_users_field_to_null', count($users), ['field' => trans('admin/users/table.email'), 'user_count' => count($users)]) }}
+                                </label>
+                            </div>
+                        </div>
+
                         <!--  Groups -->
                         <div class="form-group{{ $errors->has('groups') ? ' has-error' : '' }}">
                             <label class="col-md-3 control-label" for="groups"> {{ trans('general.groups') }}</label>
                             <div class="col-md-6">
                                 @if ((config('app.lock_passwords') || (!Auth::user()->isSuperUser())))
-                                    <span class="help-block">{{  trans('admin/users/general.group_memberships_helpblock') }}</p>
+                                    <p class="help-block">{{  trans('admin/users/general.group_memberships_helpblock') }}</p>
                                 @else
                                     <div class="controls">
                                         <select name="groups[]" id="groups[]" multiple="multiple" class="form-control" aria-label="groups">
@@ -233,45 +398,81 @@
                     </div> <!--/col-md-5-->
                     </div>
 
+                        <!-- Display Name -->
+                        <div class="form-group {{ $errors->has('display_name') ? ' has-error' : '' }}">
+                            <label for="display_name" class="col-md-3 control-label">{{ trans('admin/users/table.display_name') }}</label>
+                            <div class="col-md-4">
+                                    <input type="text" class="form-control" placeholder="{{ trans('admin/users/table.display_name') }}" name="display_name" id="display_name" value="{{ old('display_name') }}">
+                                {!! $errors->first('display_name', '<span class="alert-msg"><i class="fas fa-times"></i> :message</span>') !!}
+                            </div>
+                            <div class="col-md-5">
+                                <label class="form-control">
+                                    <input type="checkbox" name="null_display_name" value="1" />
+                                    {{ trans_choice('general.set_to_null', count($users),['selection_count' => count($users)]) }}
+                                </label>
+                            </div>
+                        </div>
+
 
                         <!-- Start Date -->
-                        <div class="form-group {{ $errors->has('start_date') ? ' has-error' : '' }}">
+                        <div class="form-group{{ $errors->has('start_date') ? ' has-error' : '' }}">
                             <label for="start_date" class="col-md-3 control-label">{{ trans('general.start_date') }}</label>
                             <div class="col-md-4">
-                                <div class="input-group date" data-provide="datepicker" data-date-format="yyyy-mm-dd"  data-autoclose="true">
-                                    <input type="text" class="form-control" placeholder="{{ trans('general.start_date') }}" name="start_date" id="start_date" value="{{ old('start_date') }}">
-                                    <span class="input-group-addon"><x-icon type="calendar" /></span>
-                                </div>
-                                {!! $errors->first('start_date', '<span class="alert-msg"><i class="fas fa-times"></i> :message</span>') !!}
+                                <x-input.datepicker
+                                    name="start_date"
+                                    value="{{ old('start_date') }}"
+                                    placeholder="{{ trans('general.select_date') }}"
+                                />
+                                {!! $errors->first('start_date', '<span class="alert-msg" aria-hidden="true"><i class="fas fa-times" aria-hidden="true"></i> :message</span>') !!}
                             </div>
                             <div class="col-md-5">
                                 <label class="form-control">
-                                    <input type="checkbox" name="null_start_date" value="1" />
+                                    <input type="checkbox" name="null_start_date" value="1">
                                     {{ trans_choice('general.set_to_null', count($users),['selection_count' => count($users)]) }}
                                 </label>
                             </div>
                         </div>
+
 
                         <!-- End Date -->
-                        <div class="form-group {{ $errors->has('end_date') ? ' has-error' : '' }}">
+                        <div class="form-group{{ $errors->has('end_date') ? ' has-error' : '' }}">
                             <label for="end_date" class="col-md-3 control-label">{{ trans('general.end_date') }}</label>
                             <div class="col-md-4">
-                                <div class="input-group date" data-provide="datepicker" data-date-format="yyyy-mm-dd"  data-autoclose="true">
-                                    <input type="text" class="form-control" placeholder="{{ trans('general.end_date') }}" name="end_date" id="end_date" value="{{ old('end_date') }}">
-                                    <span class="input-group-addon"><x-icon type="calendar" /></span>
-                                </div>
-                                {!! $errors->first('end_date', '<span class="alert-msg"><i class="fas fa-times"></i> :message</span>') !!}
+                                <x-input.datepicker
+                                    name="end_date"
+                                    value="{{ old('end_date') }}"
+                                    placeholder="{{ trans('general.select_date') }}"
+                                />
+                                {!! $errors->first('end_date', '<span class="alert-msg" aria-hidden="true"><i class="fas fa-times" aria-hidden="true"></i> :message</span>') !!}
                             </div>
                             <div class="col-md-5">
                                 <label class="form-control">
-                                    <input type="checkbox" name="null_end_date" value="1" />
+                                    <input type="checkbox" name="null_end_date" value="1">
                                     {{ trans_choice('general.set_to_null', count($users),['selection_count' => count($users)]) }}
                                 </label>
                             </div>
                         </div>
 
 
-                        @foreach ($users as $user)
+                        <!-- Notes -->
+                        <div class="form-group{{ $errors->has('notes') ? ' has-error' : '' }}">
+                            <label class="col-md-3 control-label" for="notes">{{ trans('general.notes') }}</label>
+                            <div class="col-md-6">
+                                <textarea class="form-control" rows="4" id="notes" name="notes" aria-label="notes"></textarea>
+                                {!! $errors->first('notes', '<span class="alert-msg" aria-hidden="true">:message</span>') !!}
+                            </div>
+                        </div>
+
+                        <div class="form-group">
+                            <div class=" col-md-9 col-md-offset-3">
+                                <label class="form-control">
+                                    <input type="checkbox" name="null_notes" value="1" />
+                                    {{ trans_choice('general.set_users_field_to_null', count($users), ['field' => trans('general.notes'), 'user_count' => count($users)]) }}
+                                </label>
+                            </div>
+                        </div>
+
+                    @foreach ($users as $user)
                             <input type="hidden" name="ids[{{ $user->id }}]" value="{{ $user->id }}">
                         @endforeach
                     </div> <!--/.box-body-->

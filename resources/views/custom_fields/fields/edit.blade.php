@@ -12,10 +12,6 @@
 
 @section('content')
 
-@section('header_right')
-<a href="{{ route('fields.index') }}" class="btn btn-primary pull-right">
-  {{ trans('general.back') }}</a>
-@stop
 
 
 {{-- Page content --}}
@@ -67,6 +63,7 @@
                     'text' => trans('admin/custom_fields/general.types.text'),
                     'listbox' => trans('admin/custom_fields/general.types.listbox'),
                     'textarea' => trans('admin/custom_fields/general.types.textarea'),
+                    'markdown-textarea' => trans('admin/custom_fields/general.types.markdown-textarea'),
                     'checkbox' => trans('admin/custom_fields/general.types.checkbox'),
                     'radio' => trans('admin/custom_fields/general.types.radio'),
                 ]"
@@ -123,7 +120,7 @@
               {{ trans('admin/custom_fields/general.field_custom_format') }}
             </label>
             <div class="col-md-8 required">
-                <input class="form-control" id="custom_format" aria-label="custom_format" placeholder="regex:/^[0-9]{15}$/" name="custom_format" type="text" value="{{ old('custom_format', (($field->format!='') && (stripos($field->format,'regex')===0)) ? $field->format : '') }}">
+                <input class="form-control" id="custom_format" aria-label="custom_format" maxlength="191" placeholder="regex:/^[0-9]{15}$/" name="custom_format" type="text" value="{{ old('custom_format', (($field->format!='') && (stripos($field->format,'regex')===0)) ? $field->format : '') }}">
                 <p class="help-block">{!! trans('admin/custom_fields/general.field_custom_format_help') !!}</p>
 
               {!! $errors->first('custom_format', '<span class="alert-msg" aria-hidden="true"><i class="fas fa-times" aria-hidden="true"></i> :message</span>') !!}
@@ -351,7 +348,7 @@
         // and don't display encryption option for checkbox or radio
         $(".field_element").change(function(){
             $(this).find("option:selected").each(function(){
-                if (($(this).attr("value")!="text") && ($(this).attr("value")!="textarea")){
+                if (($(this).attr("value") != "text") && ($(this).attr("value") != "textarea") && ($(this).attr("value") != "markdown-textarea")) {
                     $("#field_values_text").show();
                 if ($(this).attr("value") == "checkbox" || $(this).attr("value") == "radio") {
                     $("#encryption_section").hide();

@@ -26,15 +26,23 @@
                     </div>
                     <div class="box-body">
                         {{csrf_field()}}
-                        @if ($asset->company && $asset->company->name)
+                        @if ($asset->company)
+                            <!-- accessory name -->
                             <div class="form-group">
-                                <label for="company" class="col-md-3 control-label">
-                                    {{ trans('general.company') }}
-                                </label>
-                                <div class="col-md-8">
-                                    <p class="form-control-static">
-                                        {{ $asset->company->name }}
-                                    </p>
+                                <label class="col-sm-3 control-label">{{ trans('general.company') }}</label>
+                                <div class="col-md-6">
+                                    <p class="form-control-static">{!! $asset->company->present()->formattedNameLink  !!}</p>
+                                </div>
+                            </div>
+                        @endif
+
+
+                        @if ($asset->model->category)
+                            <!-- category name -->
+                            <div class="form-group">
+                                <label class="col-sm-3 control-label">{{ trans('general.category') }}</label>
+                                <div class="col-md-6">
+                                    <p class="form-control-static">{!! $asset->model->category->present()->formattedNameLink  !!}</p>
                                 </div>
                             </div>
                         @endif
@@ -45,7 +53,7 @@
                                 {{ trans('admin/hardware/form.model') }}
                             </label>
                             <div class="col-md-8">
-                                <p class="form-control-static">
+                                <p class="form-control-static" style="padding-top: 7px;">
                                     @if (($asset->model) && ($asset->model->name))
                                         {{ $asset->model->name }}
                                     @else
@@ -69,7 +77,7 @@
                                 {{ trans('admin/hardware/form.name') }}
                             </label>
 
-                            <div class="col-md-8">
+                            <div class="col-md-7">
                                 <input class="form-control" type="text" name="name" id="name"
                                        value="{{ old('name', $asset->name) }}" tabindex="1">
                                 {!! $errors->first('name', '<span class="alert-msg" aria-hidden="true"><i class="fas fa-times" aria-hidden="true"></i> :message</span>') !!}
@@ -93,14 +101,28 @@
                             </div>
                         </div>
 
+                        @if ($asset->requestable)
+                            <div class="form-group">
+                                <div class="col-md-7 col-md-offset-3">
+                                    <label class="form-control" for="set_not_requestable">
+                                        <input
+                                            type="checkbox"
+                                            value="1"
+                                            name="set_not_requestable"
+                                            id="set_not_requestable"
+                                            @checked((bool) old('set_not_requestable', true))
+                                        >
+                                        {{ trans('admin/hardware/general.not_requestable') }}
+                                    </label>
+                                </div>
+                            </div>
+                        @endif
+
                         @include ('partials.forms.checkout-selector', ['user_select' => 'true','asset_select' => 'true', 'location_select' => 'true'])
-
-                        @include ('partials.forms.edit.user-select', ['translated_name' => trans('general.user'), 'fieldname' => 'assigned_user'])
-
+                        @include ('partials.forms.edit.user-select', ['translated_name' => trans('general.user'), 'fieldname' => 'assigned_user', 'company_id' => $asset->company_id, 'style' => (session('checkout_to_type') ?: 'user') == 'user' ? '' : 'display: none;'])
                         <!-- We have to pass unselect here so that we don't default to the asset that's being checked out. We want that asset to be pre-selected everywhere else. -->
-                        @include ('partials.forms.edit.asset-select', ['translated_name' => trans('general.asset'), 'fieldname' => 'assigned_asset', 'unselect' => 'true', 'style' => 'display:none;'])
-
-                        @include ('partials.forms.edit.location-select', ['translated_name' => trans('general.location'), 'fieldname' => 'assigned_location', 'style' => 'display:none;'])
+                        @include ('partials.forms.edit.asset-select', ['translated_name' => trans('general.select_asset'), 'fieldname' => 'assigned_asset', 'company_id' => $asset->company_id, 'unselect' => 'true', 'exclude_id' => $asset->id, 'style' => session('checkout_to_type') == 'asset' ? '' : 'display: none;'])
+                        @include ('partials.forms.edit.location-select', ['translated_name' => trans('general.location'), 'fieldname' => 'assigned_location', 'company_id' => $asset->company_id, 'style' => session('checkout_to_type') == 'location' ? '' : 'display: none;'])
 
 
 
@@ -132,6 +154,7 @@
                             <div class="col-md-8">
                                 <x-input.datepicker
                                         name="expected_checkin"
+                                        col_size_class="col-md-7"
                                         :value="old('expected_checkin', $item->expected_checkin)"
                                         placeholder="{{ trans('general.select_date') }}"
                                         required="{{ Helper::checkIfRequired($item, 'expected_checkin') }}"
@@ -152,7 +175,7 @@
                                 {!! $errors->first('note', '<span class="alert-msg" aria-hidden="true"><i class="fas fa-times" aria-hidden="true"></i> :message</span>') !!}
                             </div>
                         </div>
-                        
+
                         <!-- Custom fields -->
                         @include("models/custom_fields_form", [
                                 'model' => $asset->model,
@@ -161,20 +184,32 @@
 
 
 
-                        @if ($asset->requireAcceptance() || $asset->getEula() || ($snipeSettings->webhook_endpoint!=''))
-                            <div class="form-group notification-callout">
+                        @if ($asset->requireAcceptance() || (string) $snipeSettings->require_accept_signature === '1' || $asset->getEula() || ($snipeSettings->webhook_endpoint!=''))
+                            <div class="form-group notification-callout" style="display:none;">
                                 <div class="col-md-8 col-md-offset-3">
                                     <div class="callout callout-info">
 
                                         @if ($asset->requireAcceptance())
-                                            <x-icon type="email" />
+                                            <x-icon type="email"/>
                                             {{ trans('admin/categories/general.required_acceptance') }}
                                             <br>
                                         @endif
 
+                                        @if ((string) $snipeSettings->require_accept_signature === '1')
+                                            <x-icon type="edit"/>
+                                            {{ trans('admin/categories/general.required_signature') }}
+                                            <br>
+                                        @endif
+
                                         @if ($asset->getEula())
-                                            <x-icon type="email" />
+                                            <x-icon type="email"/>
                                             {{ trans('admin/categories/general.required_eula') }}
+                                            <br>
+                                        @endif
+
+                                        @if (($asset->model?->category) && ($asset->model->category->checkin_email))
+                                            <x-icon type="email"/>
+                                            {{ trans('admin/categories/general.checkin_email_notification') }}
                                             <br>
                                         @endif
 
@@ -184,8 +219,22 @@
                                         @endif
                                     </div>
                                 </div>
+
+                                <!-- Sign in place checkbox -->
+                                @if ($asset->requireAcceptance() || (string) $snipeSettings->require_accept_signature === '1')
+                                <div id="sign_in_place_div" class="col-md-7 col-md-offset-3">
+                                    <label class="form-control">
+                                        <input type="checkbox" value="1" name="sign_in_place" @checked(old('sign_in_place', session('sign_in_place', false))) aria-label="sign_in_place">
+                                        {{ trans('general.sign_in_place') }}
+                                    </label>
+                                    <p class="help-block">
+                                        {{ trans('general.sign_in_place_help') }}
+                                    </p>
+                                </div>
+                                @endif
                             </div>
                         @endif
+
 
                     </div> <!--/.box-body-->
 

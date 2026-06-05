@@ -2,16 +2,16 @@
 
 namespace Tests\Feature\Checkouts\Api;
 
-use Illuminate\Support\Facades\Mail;
-use Notification;
-use PHPUnit\Framework\Attributes\DataProvider;
 use App\Events\CheckoutableCheckedOut;
 use App\Models\Asset;
+use App\Models\Company;
 use App\Models\Location;
 use App\Models\Statuslabel;
 use App\Models\User;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Event;
+use Notification;
+use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
 class AssetCheckoutTest extends TestCase
@@ -23,7 +23,7 @@ class AssetCheckoutTest extends TestCase
         Event::fake([CheckoutableCheckedOut::class]);
     }
 
-    public function testCheckoutRequest()
+    public function test_checkout_request()
     {
         Notification::fake();
         $requestable = Asset::factory()->requestable()->create();
@@ -37,9 +37,11 @@ class AssetCheckoutTest extends TestCase
             ->post(route('api.assets.requests.store', $nonRequestable->id))
             ->assertStatusMessageIs('error');
 
+        $this->assertHasTheseActionLogs($requestable, ['create', 'requested', 'update']); // FIXME - is this right?!
+
     }
 
-    public function testCheckingOutAssetRequiresCorrectPermission()
+    public function test_checking_out_asset_requires_correct_permission()
     {
         $this->actingAsForApi(User::factory()->create())
             ->postJson(route('api.asset.checkout', Asset::factory()->create()), [
@@ -49,7 +51,7 @@ class AssetCheckoutTest extends TestCase
             ->assertForbidden();
     }
 
-    public function testNonExistentAssetCannotBeCheckedOut()
+    public function test_non_existent_asset_cannot_be_checked_out()
     {
         $this->actingAsForApi(User::factory()->checkoutAssets()->create())
             ->postJson(route('api.asset.checkout', 1000), [
@@ -59,7 +61,7 @@ class AssetCheckoutTest extends TestCase
             ->assertStatusMessageIs('error');
     }
 
-    public function testAssetNotAvailableForCheckoutCannotBeCheckedOut()
+    public function test_asset_not_available_for_checkout_cannot_be_checked_out()
     {
         $assetAlreadyCheckedOut = Asset::factory()->assignedToUser()->create();
 
@@ -71,7 +73,7 @@ class AssetCheckoutTest extends TestCase
             ->assertStatusMessageIs('error');
     }
 
-    public function testAssetCannotBeCheckedOutToItself()
+    public function test_asset_cannot_be_checked_out_to_itself()
     {
         $asset = Asset::factory()->create();
 
@@ -83,7 +85,7 @@ class AssetCheckoutTest extends TestCase
             ->assertStatusMessageIs('error');
     }
 
-    public function testValidationWhenCheckingOutAsset()
+    public function test_validation_when_checking_out_asset()
     {
         $this->actingAsForApi(User::factory()->checkoutAssets()->create())
             ->postJson(route('api.asset.checkout', Asset::factory()->create()), [])
@@ -92,9 +94,74 @@ class AssetCheckoutTest extends TestCase
         Event::assertNotDispatched(CheckoutableCheckedOut::class);
     }
 
-    public function testCannotCheckoutAcrossCompaniesWhenFullCompanySupportEnabled()
+    public function test_cannot_checkout_across_companies_when_full_company_support_enabled()
     {
-        $this->markTestIncomplete('This is not implemented');
+        $this->settings->enableMultipleFullCompanySupport();
+
+        [$companyA, $companyB] = Company::factory()->count(2)->create();
+
+        $actorInCompanyA = User::factory()->checkoutAssets()->for($companyA)->create();
+        $assetInCompanyA = Asset::factory()->for($companyA)->create();
+        $userInCompanyB = User::factory()->for($companyB)->create();
+
+        $this->actingAsForApi($actorInCompanyA)
+            ->postJson(route('api.asset.checkout', $assetInCompanyA), [
+                'checkout_to_type' => 'user',
+                'assigned_user' => $userInCompanyB->id,
+            ])
+            ->assertOk()
+            ->assertStatusMessageIs('error')
+            ->assertMessagesAre(trans('general.error_user_company'));
+
+        $assetInCompanyA->refresh();
+
+        $this->assertNull($assetInCompanyA->assigned_to);
+        $this->assertNull($assetInCompanyA->assigned_type);
+        $this->assertEquals(0, $assetInCompanyA->checkout_counter);
+
+        $this->assertDatabaseMissing('action_logs', [
+            'created_by' => $actorInCompanyA->id,
+            'action_type' => 'checkout',
+            'target_type' => User::class,
+            'target_id' => $userInCompanyB->id,
+            'item_type' => Asset::class,
+            'item_id' => $assetInCompanyA->id,
+        ]);
+    }
+
+    public function test_checkout_by_tag_cannot_checkout_across_companies_when_full_company_support_enabled()
+    {
+        $this->settings->enableMultipleFullCompanySupport();
+
+        [$companyA, $companyB] = Company::factory()->count(2)->create();
+
+        $actorInCompanyA = User::factory()->checkoutAssets()->for($companyA)->create();
+        $assetInCompanyA = Asset::factory()->for($companyA)->create();
+        $userInCompanyB = User::factory()->for($companyB)->create();
+
+        $this->actingAsForApi($actorInCompanyA)
+            ->postJson(route('api.assets.checkout.bytag', $assetInCompanyA->asset_tag), [
+                'checkout_to_type' => 'user',
+                'assigned_user' => $userInCompanyB->id,
+            ])
+            ->assertOk()
+            ->assertStatusMessageIs('error')
+            ->assertMessagesAre(trans('general.error_user_company'));
+
+        $assetInCompanyA->refresh();
+
+        $this->assertNull($assetInCompanyA->assigned_to);
+        $this->assertNull($assetInCompanyA->assigned_type);
+        $this->assertEquals(0, $assetInCompanyA->checkout_counter);
+
+        $this->assertDatabaseMissing('action_logs', [
+            'created_by' => $actorInCompanyA->id,
+            'action_type' => 'checkout',
+            'target_type' => User::class,
+            'target_id' => $userInCompanyB->id,
+            'item_type' => Asset::class,
+            'item_id' => $assetInCompanyA->id,
+        ]);
     }
 
     /**
@@ -114,7 +181,7 @@ class AssetCheckoutTest extends TestCase
                         'target' => $user,
                         'expected_location' => $userLocation,
                     ];
-                }
+                },
             ],
             'Checkout to User without location set' => [
                 function () {
@@ -126,7 +193,7 @@ class AssetCheckoutTest extends TestCase
                         'target' => $user,
                         'expected_location' => null,
                     ];
-                }
+                },
             ],
             'Checkout to Asset with location set' => [
                 function () {
@@ -139,7 +206,7 @@ class AssetCheckoutTest extends TestCase
                         'target' => $asset,
                         'expected_location' => $location,
                     ];
-                }
+                },
             ],
             'Checkout to Asset without location set' => [
                 function () {
@@ -151,7 +218,7 @@ class AssetCheckoutTest extends TestCase
                         'target' => $asset,
                         'expected_location' => null,
                     ];
-                }
+                },
             ],
             'Checkout to Location' => [
                 function () {
@@ -162,13 +229,13 @@ class AssetCheckoutTest extends TestCase
                         'target' => $location,
                         'expected_location' => $location,
                     ];
-                }
+                },
             ],
         ];
     }
 
     #[DataProvider('checkoutTargets')]
-    public function testAssetCanBeCheckedOut($data)
+    public function test_asset_can_be_checked_out($data)
     {
         ['checkout_type' => $type, 'target' => $target, 'expected_location' => $expectedLocation] = $data();
 
@@ -191,7 +258,7 @@ class AssetCheckoutTest extends TestCase
         $asset->refresh();
         $this->assertTrue($asset->assignedTo()->is($target));
         $this->assertEquals('Changed Name', $asset->name);
-        $this->assertTrue($asset->assetstatus->is($newStatus));
+        $this->assertTrue($asset->status->is($newStatus));
         $this->assertEquals('2024-04-01 00:00:00', $asset->last_checkout);
         $this->assertEquals('2024-04-08 00:00:00', (string) $asset->expected_checkin);
 
@@ -210,12 +277,93 @@ class AssetCheckoutTest extends TestCase
         });
     }
 
-    public function testLicenseSeatsAreAssignedToUserUponCheckout()
+    public function test_asset_can_be_checked_out_to_user_in_same_company_via_pivot_when_fmcs_enabled()
+    {
+        // Regression: company check used to compare asset company_id to user's primary company_id only.
+        // Users assigned to multiple companies via the pivot table must be able to receive assets
+        // from any of their companies — not just their first/primary one.
+        $this->settings->enableMultipleFullCompanySupport();
+
+        [$companyA, $companyB, $companyC] = Company::factory()->count(3)->create();
+
+        // Actor is in companyC (same as the asset) so FMCS scoping lets them see and checkout it.
+        $actor = User::factory()->checkoutAssets()->for($companyC)->create();
+        $assetInCompanyC = Asset::factory()->for($companyC)->create();
+
+        // Target user's primary company is A, but they also belong to C via pivot.
+        $target = User::factory()->for($companyA)->create();
+        $target->companies()->sync([$companyA->id, $companyB->id, $companyC->id]);
+
+        $this->actingAsForApi($actor)
+            ->postJson(route('api.asset.checkout', $assetInCompanyC), [
+                'checkout_to_type' => 'user',
+                'assigned_user' => $target->id,
+            ])
+            ->assertOk()
+            ->assertStatusMessageIs('success');
+
+        $assetInCompanyC->refresh();
+        $this->assertEquals($target->id, $assetInCompanyC->assigned_to);
+    }
+
+    public function test_asset_cannot_be_checked_out_to_user_whose_companies_exclude_asset_company_when_fmcs_enabled()
+    {
+        $this->settings->enableMultipleFullCompanySupport();
+
+        [$companyA, $companyB, $companyC] = Company::factory()->count(3)->create();
+
+        // Actor is in companyC (same as the asset).
+        $actor = User::factory()->checkoutAssets()->for($companyC)->create();
+        $assetInCompanyC = Asset::factory()->for($companyC)->create();
+
+        // Target belongs to A and B — not C. Checkout to them should be blocked.
+        $target = User::factory()->for($companyA)->create();
+        $target->companies()->sync([$companyA->id, $companyB->id]);
+
+        $this->actingAsForApi($actor)
+            ->postJson(route('api.asset.checkout', $assetInCompanyC), [
+                'checkout_to_type' => 'user',
+                'assigned_user' => $target->id,
+            ])
+            ->assertOk()
+            ->assertStatusMessageIs('error')
+            ->assertMessagesAre(trans('general.error_user_company'));
+
+        $assetInCompanyC->refresh();
+        $this->assertNull($assetInCompanyC->assigned_to);
+    }
+
+    public function test_asset_can_be_checked_out_to_user_with_no_company_when_fmcs_enabled()
+    {
+        // Users with no company associations should not be blocked — they're unrestricted.
+        $this->settings->enableMultipleFullCompanySupport();
+
+        $company = Company::factory()->create();
+        // Actor is in the same company as the asset.
+        $actor = User::factory()->checkoutAssets()->for($company)->create();
+        $assetInCompany = Asset::factory()->for($company)->create();
+
+        $target = User::factory()->create(['company_id' => null]);
+        $target->companies()->sync([]);
+
+        $this->actingAsForApi($actor)
+            ->postJson(route('api.asset.checkout', $assetInCompany), [
+                'checkout_to_type' => 'user',
+                'assigned_user' => $target->id,
+            ])
+            ->assertOk()
+            ->assertStatusMessageIs('success');
+
+        $assetInCompany->refresh();
+        $this->assertEquals($target->id, $assetInCompany->assigned_to);
+    }
+
+    public function test_license_seats_are_assigned_to_user_upon_checkout()
     {
         $this->markTestIncomplete('This is not implemented');
     }
 
-    public function testLastCheckoutUsesCurrentDateIfNotProvided()
+    public function test_last_checkout_uses_current_date_if_not_provided()
     {
         $asset = Asset::factory()->create(['last_checkout' => now()->subMonth()]);
 
@@ -228,5 +376,36 @@ class AssetCheckoutTest extends TestCase
         $asset->refresh();
 
         $this->assertTrue((int) Carbon::parse($asset->last_checkout)->diffInSeconds(now(), true) < 2);
+    }
+
+    public function test_api_checkout_can_update_requestable_when_field_is_passed()
+    {
+        $asset = Asset::factory()->create(['requestable' => 1]);
+        $targetUser = User::factory()->create();
+
+        $this->actingAsForApi(User::factory()->checkoutAssets()->create())
+            ->postJson(route('api.asset.checkout', $asset), [
+                'checkout_to_type' => 'user',
+                'assigned_user' => $targetUser->id,
+                'requestable' => 0,
+            ])
+            ->assertStatusMessageIs('success');
+
+        $this->assertFalse((bool) $asset->fresh()->requestable);
+    }
+
+    public function test_api_checkout_leaves_requestable_unchanged_when_field_is_omitted()
+    {
+        $asset = Asset::factory()->create(['requestable' => 1]);
+        $targetUser = User::factory()->create();
+
+        $this->actingAsForApi(User::factory()->checkoutAssets()->create())
+            ->postJson(route('api.asset.checkout', $asset), [
+                'checkout_to_type' => 'user',
+                'assigned_user' => $targetUser->id,
+            ])
+            ->assertStatusMessageIs('success');
+
+        $this->assertTrue((bool) $asset->fresh()->requestable);
     }
 }

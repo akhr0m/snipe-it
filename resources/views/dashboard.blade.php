@@ -12,7 +12,7 @@
 @if ($snipeSettings->dashboard_message!='')
 <div class="row">
     <div class="col-md-12">
-        <div class="box">
+        <div class="box box-default">
             <!-- /.box-header -->
             <div class="box-body">
                 <div class="row">
@@ -143,15 +143,14 @@
             </div>
         </a>
     </div><!-- ./col -->
-
-</div>
 </div>
 
 @if ($counts['grand_total'] == 0)
 
     <div class="row">
+
         <div class="col-md-12">
-            <div class="box">
+            <div class="box box-default">
                 <div class="box-header with-border">
                     <h2 class="box-title">{{ trans('general.dashboard_info') }}</h2>
                 </div>
@@ -213,7 +212,7 @@
 <!-- recent activity -->
 <div class="row">
   <div class="col-md-8">
-    <div class="box">
+    <div class="box box-default">
       <div class="box-header with-border">
         <h2 class="box-title">{{ trans('general.recent_activity') }}</h2>
         <div class="box-tools pull-right">
@@ -226,7 +225,6 @@
       <div class="box-body">
         <div class="row">
           <div class="col-md-12">
-            <div class="table-responsive">
 
                 <table
                     data-cookie-id-table="dashActivityReport"
@@ -235,6 +233,9 @@
                     data-side-pagination="server"
                     data-id-table="dashActivityReport"
                     data-sort-order="desc"
+                    data-show-columns="false"
+                    data-fixed-number="false"
+                    data-fixed-right-number="false"
                     data-sort-name="created_at"
                     id="dashActivityReport"
                     class="table table-striped snipe-table"
@@ -250,13 +251,9 @@
                     </tr>
                     </thead>
                 </table>
-
-
-
-            </div><!-- /.responsive -->
           </div><!-- /.col -->
           <div class="text-center col-md-12" style="padding-top: 10px;">
-            <a href="{{ route('reports.activity') }}" class="btn btn-primary btn-sm" style="width: 100%">{{ trans('general.viewall') }}</a>
+            <a href="{{ route('reports.activity') }}" class="btn btn-theme btn-sm" style="width: 100%">{{ trans('general.viewall') }}</a>
           </div>
         </div><!-- /.row -->
       </div><!-- ./box-body -->
@@ -308,13 +305,15 @@
 				<div class="box-body">
 					<div class="row">
 						<div class="col-md-12">
-							<div class="table-responsive">
 							<table
 									data-cookie-id-table="dashCompanySummary"
 									data-height="400"
                                     data-pagination="false"
 									data-side-pagination="server"
 									data-sort-order="desc"
+                                    data-show-columns="false"
+                                    data-fixed-number="false"
+                                    data-fixed-right-number="false"
 									data-sort-field="assets_count"
 									id="dashCompanySummary"
 									class="table table-striped snipe-table"
@@ -350,10 +349,9 @@
 								</tr>
 								</thead>
 							</table>
-							</div>
 						</div> <!-- /.col -->
 						<div class="text-center col-md-12" style="padding-top: 10px;">
-							<a href="{{ route('companies.index') }}" class="btn btn-primary btn-sm" style="width: 100%">{{ trans('general.viewall') }}</a>
+							<a href="{{ route('companies.index') }}" class="btn btn-theme btn-sm" style="width: 100%">{{ trans('general.viewall') }}</a>
 						</div>
 					</div> <!-- /.row -->
 
@@ -376,15 +374,18 @@
 				<div class="box-body">
 					<div class="row">
 						<div class="col-md-12">
-							<div class="table-responsive">
+
 							<table
 									data-cookie-id-table="dashLocationSummary"
 									data-height="400"
 									data-side-pagination="server"
                                     data-pagination="false"
 									data-sort-order="desc"
+                                    data-fixed-number="false"
+                                    data-fixed-right-number="false"
 									data-sort-field="assets_count"
 									id="dashLocationSummary"
+                                    data-show-columns="false"
 									class="table table-striped snipe-table"
 									data-url="{{ route('api.locations.index', ['sort' => 'assets_count', 'order' => 'asc']) }}">
 								<thead>
@@ -408,10 +409,9 @@
 								</tr>
 								</thead>
 							</table>
-							</div>
 						</div> <!-- /.col -->
 						<div class="text-center col-md-12" style="padding-top: 10px;">
-							<a href="{{ route('locations.index') }}" class="btn btn-primary btn-sm" style="width: 100%">{{ trans('general.viewall') }}</a>
+							<a href="{{ route('locations.index') }}" class="btn btn-theme btn-sm" style="width: 100%">{{ trans('general.viewall') }}</a>
 						</div>
 					</div> <!-- /.row -->
 
@@ -438,12 +438,15 @@
             <div class="box-body">
                 <div class="row">
                     <div class="col-md-12">
-                        <div class="table-responsive">
+
                         <table
                                 data-cookie-id-table="dashCategorySummary"
                                 data-height="400"
                                 data-pagination="false"
                                 data-side-pagination="server"
+                                data-show-columns="false"
+                                data-fixed-number="false"
+                                data-fixed-right-number="false"
                                 data-sort-order="desc"
                                 data-sort-field="assets_count"
                                 id="dashCategorySummary"
@@ -478,10 +481,10 @@
                             </tr>
                             </thead>
                         </table>
-                        </div>
+
                     </div> <!-- /.col -->
                     <div class="text-center col-md-12" style="padding-top: 10px;">
-                        <a href="{{ route('categories.index') }}" class="btn btn-primary btn-sm" style="width: 100%">{{ trans('general.viewall') }}</a>
+                        <a href="{{ route('categories.index') }}" class="btn btn-theme btn-sm" style="width: 100%">{{ trans('general.viewall') }}</a>
                     </div>
                 </div> <!-- /.row -->
 
@@ -502,7 +505,7 @@
 @push('js')
 
 
-
+        <script src="{{ url(mix('js/dist/Chart.min.js')) }}"></script>
 <script nonce="{{ csrf_token() }}">
     // ---------------------------
     // - ASSET STATUS CHART -

@@ -9,18 +9,33 @@ class LicensePresenter extends Presenter
 {
     /**
      * Json Column Layout for bootstrap table
+     *
      * @return string
      */
     public static function dataTableLayout()
     {
         $layout = [
             [
+                'field' => 'checkbox',
+                'checkbox' => true,
+                'formatter' => 'checkboxEnabledFormatter',
+                'titleTooltip' => trans('general.select_all_none'),
+                'printIgnore' => true,
+                'class' => 'hidden-print',
+            ], [
                 'field' => 'id',
                 'searchable' => false,
                 'sortable' => true,
                 'switchable' => true,
                 'title' => trans('general.id'),
                 'visible' => false,
+            ],  [
+                'field' => 'name',
+                'searchable' => true,
+                'sortable' => true,
+                'switchable' => false,
+                'title' => trans('general.name'),
+                'formatter' => 'licensesLinkFormatter',
             ], [
                 'field' => 'company',
                 'searchable' => true,
@@ -29,13 +44,6 @@ class LicensePresenter extends Presenter
                 'title' => trans('admin/companies/table.title'),
                 'visible' => false,
                 'formatter' => 'companiesLinkObjFormatter',
-            ], [
-                'field' => 'name',
-                'searchable' => true,
-                'sortable' => true,
-                'switchable' => false,
-                'title' => trans('general.name'),
-                'formatter' => 'licensesLinkFormatter',
             ], [
                 'field' => 'product_key',
                 'searchable' => true,
@@ -49,10 +57,18 @@ class LicensePresenter extends Presenter
                 'title' => trans('admin/licenses/form.expiration'),
                 'formatter' => 'dateDisplayFormatter',
             ], [
+                'field' => 'termination_date',
+                'searchable' => true,
+                'sortable' => true,
+                'visible' => false,
+                'title' => trans('admin/licenses/form.termination_date'),
+                'formatter' => 'dateDisplayFormatter',
+            ], [
                 'field' => 'license_email',
                 'searchable' => true,
                 'sortable' => true,
                 'title' => trans('admin/licenses/form.to_email'),
+                'formatter' => 'emailFormatter',
             ], [
                 'field' => 'license_name',
                 'searchable' => true,
@@ -102,19 +118,19 @@ class LicensePresenter extends Presenter
                 'class' => 'text-right text-padding-number-cell',
                 'footerFormatter' => 'qtySumFormatter',
             ], [
+                'field' => 'percent_remaining',
+                'searchable' => false,
+                'sortable' => false,
+                'switchable' => true,
+                'title' => '% '.trans('general.remaining'),
+                'visible' => true,
+                'formatter' => 'progressBarFormatter',
+            ], [
                 'field' => 'purchase_date',
                 'searchable' => true,
                 'sortable' => true,
                 'visible' => false,
                 'title' => trans('general.purchase_date'),
-                'formatter' => 'dateDisplayFormatter',
-            ],
-            [
-                'field' => 'termination_date',
-                'searchable' => true,
-                'sortable' => true,
-                'visible' => false,
-                'title' => trans('admin/licenses/form.termination_date'),
                 'formatter' => 'dateDisplayFormatter',
             ],
             [
@@ -201,7 +217,7 @@ class LicensePresenter extends Presenter
             'switchable' => false,
             'title' => trans('general.checkin').'/'.trans('general.checkout'),
             'visible' => true,
-            'formatter' => 'licensesInOutFormatter',
+            'formatter' => 'licenseInOutFormatter',
             'printIgnore' => true,
         ];
 
@@ -213,6 +229,7 @@ class LicensePresenter extends Presenter
             'title' => trans('table.actions'),
             'formatter' => 'licensesActionsFormatter',
             'printIgnore' => true,
+            'class' => 'hidden-print',
         ];
 
         return json_encode($layout);
@@ -220,38 +237,61 @@ class LicensePresenter extends Presenter
 
     /**
      * Json Column Layout for bootstrap table
+     *
      * @return string
      */
-    public static function dataTableLayoutSeats()
+    public static function dataTableLayoutSeats(bool $withCheckbox = true)
     {
-        $layout = [
+        $layout = [];
+
+        if ($withCheckbox) {
+            $layout[] = [
+                'field' => 'checkbox',
+                'checkbox' => true,
+                'formatter' => 'checkboxEnabledFormatter',
+                'titleTooltip' => trans('general.select_all_none'),
+                'printIgnore' => true,
+                'class' => 'hidden-print',
+            ];
+        }
+
+        $layout = array_merge($layout, [[
+            'field' => 'id',
+            'searchable' => false,
+            'sortable' => true,
+            'switchable' => true,
+            'title' => trans('general.id'),
+            'visible' => false,
+        ], [
+            'field' => 'assigned_user',
+            'searchable' => false,
+            'sortable' => false,
+            'switchable' => true,
+            'title' => trans('admin/licenses/general.user'),
+            'visible' => true,
+            'formatter' => 'usersLinkObjFormatter',
+        ], [
+            'field' => 'assigned_user.email',
+            'searchable' => false,
+            'sortable' => false,
+            'switchable' => true,
+            'title' => trans('admin/users/table.email'),
+            'visible' => true,
+            'formatter' => 'emailFormatter',
+        ],
             [
-                'field' => 'id',
-                'searchable' => false,
-                'sortable' => true,
-                'switchable' => true,
-                'title' => trans('general.id'),
-                'visible' => false,
-           ],[
-                'field' => 'assigned_user',
+                'field' => 'assigned_user.companies',
                 'searchable' => false,
                 'sortable' => false,
                 'switchable' => true,
-                'title' => trans('admin/licenses/general.user'),
+                'title' => trans('general.companies'),
                 'visible' => true,
-                'formatter' => 'usersLinkObjFormatter',
-            ], [
-                'field' => 'assigned_user.email',
+                'formatter' => 'companiesArrayLinkFormatter',
+            ],
+            [
+                'field' => 'assigned_user.department',
                 'searchable' => false,
                 'sortable' => false,
-                'switchable' => true,
-                'title' => trans('admin/users/table.email'),
-                'visible' => true,
-                'formatter' => 'emailFormatter',
-            ], [
-                'field' => 'department',
-                'searchable' => false,
-                'sortable' => true,
                 'switchable' => true,
                 'title' => trans('general.department'),
                 'visible' => false,
@@ -287,7 +327,7 @@ class LicensePresenter extends Presenter
                 'sortable' => false,
                 'visible' => false,
                 'title' => trans('general.notes'),
-                'formatter' => 'notesFormatter'
+                'formatter' => 'notesFormatter',
             ],
             [
                 'field' => 'checkincheckout',
@@ -297,23 +337,103 @@ class LicensePresenter extends Presenter
                 'title' => trans('general.checkin').'/'.trans('general.checkout'),
                 'visible' => true,
                 'formatter' => 'licenseSeatInOutFormatter',
+                'printIgnore' => true,
+                'class' => 'hidden-print',
             ],
-        ];
+        ]);
+
+        return json_encode($layout);
+    }
+
+    public static function dataTableLayoutSeatsCheckedOutToAssets($hide_fields = [])
+    {
+        $layout = [];
+
+        if (! in_array('checkbox', $hide_fields)) {
+            $layout[] = [
+                'field' => 'checkbox',
+                'checkbox' => true,
+                'formatter' => 'checkboxEnabledFormatter',
+                'titleTooltip' => trans('general.select_all_none'),
+                'printIgnore' => true,
+                'class' => 'hidden-print',
+            ];
+        }
+
+        $layout = array_merge($layout, [
+            [
+                'field' => 'id',
+                'searchable' => false,
+                'sortable' => true,
+                'switchable' => true,
+                'title' => trans('general.id'),
+                'visible' => false,
+            ],
+            [
+                'field' => 'license',
+                'searchable' => true,
+                'sortable' => true,
+                'switchable' => false,
+                'title' => trans('general.name'),
+                'formatter' => 'licensesLinkObjFormatter',
+            ],
+            [
+                'field' => 'license.serial',
+                'searchable' => true,
+                'sortable' => true,
+                'title' => trans('admin/licenses/form.license_key'),
+                'formatter' => 'licenseKeyFormatter',
+            ],
+            [
+                'field' => 'expiration_date',
+                'searchable' => false,
+                'sortable' => false,
+                'switchable' => true,
+                'title' => trans('admin/licenses/form.expiration'),
+                'visible' => true,
+            ],
+            [
+                'field' => 'notes',
+                'searchable' => false,
+                'sortable' => false,
+                'visible' => false,
+                'title' => trans('general.notes'),
+                'formatter' => 'notesFormatter',
+            ],
+            [
+                'field' => 'checkincheckout',
+                'searchable' => false,
+                'sortable' => false,
+                'switchable' => false,
+                'title' => trans('general.checkin'),
+                'visible' => true,
+                'formatter' => 'licenseSeatInOutFormatter',
+                'printIgnore' => true,
+                'class' => 'hidden-print',
+            ],
+        ]);
 
         return json_encode($layout);
     }
 
     /**
      * Link to this licenses Name
+     *
      * @return string
      */
     public function nameUrl()
     {
-        return (string) link_to_route('licenses.show', $this->name, $this->id);
+        if (auth()->user()->can('view', ['\App\Models\License', $this])) {
+            return '<a href="'.route('licenses.show', $this->id).'">'.e($this->display_name).'</a>';
+        } else {
+            return e($this->display_name);
+        }
+
     }
 
     /**
      * Link to this licenses Name
+     *
      * @return string
      */
     public function fullName()
@@ -322,16 +442,8 @@ class LicensePresenter extends Presenter
     }
 
     /**
-     * Link to this licenses serial
-     * @return string
-     */
-    public function serialUrl()
-    {
-        return (string) link_to('/licenses/'.$this->id, mb_strimwidth($this->serial, 0, 50, '...'));
-    }
-
-    /**
      * Url to view this item.
+     *
      * @return string
      */
     public function viewUrl()

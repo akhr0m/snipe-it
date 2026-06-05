@@ -3,12 +3,14 @@
 namespace App\Importer;
 
 use App\Models\Asset;
+use App\Models\Company;
 use App\Models\Department;
 use App\Models\Setting;
 use App\Models\User;
 use App\Notifications\WelcomeNotification;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Password;
 
 /**
  * This is ONLY used for the User Import. When we are importing users
@@ -20,6 +22,7 @@ use Illuminate\Support\Facades\Password;
 class UserImporter extends ItemImporter
 {
     protected $users;
+
     protected $send_welcome = false;
 
     public function __construct($filename)
@@ -34,23 +37,51 @@ class UserImporter extends ItemImporter
     }
 
     /**
+     * Parse a pipe-separated company column value into an array of company IDs,
+     * creating companies that do not yet exist. Returns an empty array when the
+     * raw value is blank (so callers can treat that as "don't change").
+     *
+     * @param  string  $raw  Raw cell value, e.g. "Acme Corp|Widget Inc"
+     * @return int[]
+     */
+    private function resolveCompanyIds(string $raw): array
+    {
+        if ($raw === '') {
+            return [];
+        }
+
+        $ids = [];
+        foreach (array_filter(array_map('trim', explode('|', $raw))) as $name) {
+            $id = $this->createOrFetchCompany($name);
+            if ($id) {
+                $ids[] = (int) $id;
+            }
+        }
+
+        return Company::getIdsForCurrentUser($ids);
+    }
+
+    /**
      * Create a user if a duplicate does not exist.
+     *
      * @todo Investigate how this should interact with Importer::createOrFetchUser
      *
      * @author Daniel Melzter
+     *
      * @since 4.0
-     * @param array $row
      */
     public function createUserIfNotExists(array $row)
     {
         // Pull the records from the CSV to determine their values
         $this->item['id'] = trim($this->findCsvMatch($row, 'id'));
         $this->item['username'] = trim($this->findCsvMatch($row, 'username'));
+        $this->item['display_name'] = trim($this->findCsvMatch($row, 'display_name')) ?: null;
         $this->item['first_name'] = trim($this->findCsvMatch($row, 'first_name'));
         $this->item['last_name'] = trim($this->findCsvMatch($row, 'last_name'));
         $this->item['email'] = trim($this->findCsvMatch($row, 'email'));
         $this->item['gravatar'] = trim($this->findCsvMatch($row, 'gravatar'));
         $this->item['phone'] = trim($this->findCsvMatch($row, 'phone_number'));
+        $this->item['mobile'] = trim($this->findCsvMatch($row, 'mobile_number'));
         $this->item['website'] = trim($this->findCsvMatch($row, 'website'));
         $this->item['jobtitle'] = trim($this->findCsvMatch($row, 'jobtitle'));
         $this->item['address'] = trim($this->findCsvMatch($row, 'address'));
@@ -64,9 +95,9 @@ class UserImporter extends ItemImporter
         $this->item['employee_num'] = trim($this->findCsvMatch($row, 'employee_num'));
         $this->item['department_id'] = trim($this->createOrFetchDepartment(trim($this->findCsvMatch($row, 'department'))));
         $this->item['manager_id'] = $this->fetchManager(trim($this->findCsvMatch($row, 'manager_username')), trim($this->findCsvMatch($row, 'manager_employee_num')), trim($this->findCsvMatch($row, 'manager_first_name')), trim($this->findCsvMatch($row, 'manager_last_name')));
-        $this->item['remote'] = ($this->fetchHumanBoolean(trim($this->findCsvMatch($row, 'remote'))) == 1 ) ? '1' : 0;
-        $this->item['vip'] = ($this->fetchHumanBoolean(trim($this->findCsvMatch($row, 'vip'))) ==1 ) ? '1' : 0;
-        $this->item['autoassign_licenses'] = ($this->fetchHumanBoolean(trim($this->findCsvMatch($row, 'autoassign_licenses'))) ==1 ) ? '1' : 0;
+        $this->item['remote'] = ($this->fetchHumanBoolean(trim($this->findCsvMatch($row, 'remote'))) == 1) ? '1' : 0;
+        $this->item['vip'] = ($this->fetchHumanBoolean(trim($this->findCsvMatch($row, 'vip'))) == 1) ? '1' : 0;
+        $this->item['autoassign_licenses'] = ($this->fetchHumanBoolean(trim($this->findCsvMatch($row, 'autoassign_licenses'))) == 1) ? '1' : 0;
 
         $this->handleEmptyStringsForDates();
 
@@ -75,14 +106,21 @@ class UserImporter extends ItemImporter
             $this->item['department_id'] = $this->createOrFetchDepartment($user_department);
         }
 
-        if (is_null($this->item['username']) || $this->item['username'] == "") {
-            $user_full_name = $this->item['first_name'] . ' ' . $this->item['last_name'];
+        // Resolve pipe-separated company names (e.g. "Acme Corp|Widget Inc") into IDs.
+        // company_id is a legacy column — company membership is managed via the pivot.
+        // Unset whatever the parent set so it is not written to the DB.
+        $companyRaw = trim($this->findCsvMatch($row, 'company'));
+        $companyIds = $this->resolveCompanyIds($companyRaw);
+        unset($this->item['company_id']);
+
+        if (is_null($this->item['username']) || $this->item['username'] == '') {
+            $user_full_name = $this->item['first_name'].' '.$this->item['last_name'];
             $user_formatted_array = User::generateFormattedNameFromFullName($user_full_name, Setting::getSettings()->username_format);
             $this->item['username'] = $user_formatted_array['username'];
         }
 
         // Check if a numeric ID was passed. If it does, use that above all else.
-        if ((array_key_exists('id', $this->item) && ($this->item['id'] != "") && (is_numeric($this->item['id']))))  {
+        if ((array_key_exists('id', $this->item) && ($this->item['id'] != '') && (is_numeric($this->item['id'])))) {
             $user = User::find($this->item['id']);
         } else {
             $user = User::where('username', $this->item['username'])->first();
@@ -90,36 +128,75 @@ class UserImporter extends ItemImporter
 
         if ($user) {
 
+            // If the user does not want to update existing values, only add new ones, bail out
             if (! $this->updating) {
                 Log::debug('A matching User '.$this->item['name'].' already exists.  ');
+
                 return;
             }
+
             $this->log('Updating User');
+
+            // CLI imports run unauthenticated and are fully trusted; only restrict web-initiated imports.
+            // Note: unset must target $this->item, not the model — sanitizeItemForUpdating() reads from $this->item.
+            if (Auth::check() && (! Auth::user()->hasAccess('users.edit') || ! Gate::allows('canEditAuthFields', $user))) {
+                unset($this->item['username']);
+                unset($this->item['email']);
+                unset($this->item['password']);
+                unset($this->item['activated']);
+            }
+
             $user->update($this->sanitizeItemForUpdating($user));
+
+            // Why do we have to do this twice? Update should
             $user->save();
+
+            // Sync company pivot when companies were specified in this row.
+            if (! empty($companyIds)) {
+                $user->companies()->sync($companyIds);
+            }
 
             // Update the location of any assets checked out to this user
             Asset::where('assigned_type', User::class)
                 ->where('assigned_to', $user->id)
                 ->update(['location_id' => $user->location_id]);
-            
+
             // Log::debug('UserImporter.php Updated User ' . print_r($user, true));
             return;
         }
 
+        // With FMCS enabled, the scoped lookup above only sees users in the current user's companies.
+        // If the username exists in another company it would appear as "not found" and fall through
+        // to create — but usernames are unique system-wide, so we must skip instead.
+        if (Auth::check() && Company::isFullMultipleCompanySupportEnabled()) {
+            if (User::withoutGlobalScopes()->where('username', $this->item['username'])->exists()) {
+                $this->log('Skipping '.$this->item['username'].': username belongs to a user outside your company scope.');
 
+                return;
+            }
+        }
 
         // This needs to be applied after the update logic, otherwise we'll overwrite user passwords
         // Issue #5408
         $this->item['password'] = $this->tempPassword;
 
         $this->log('No matching user, creating one');
-        $user = new User();
+        $user = new User;
         $user->created_by = auth()->id();
+
         $user->fill($this->sanitizeItemForStoring($user));
+
+        // TODO - check for gate here I guess
 
         if ($user->save()) {
             $this->log('User '.$this->item['name'].' was created');
+
+            // Sync all resolved companies to the pivot. For single-company rows the
+            // User::created event already added company_id; sync() here is idempotent
+            // for that case and adds any additional companies for multi-company rows.
+            if (! empty($companyIds)) {
+                $user->companies()->sync($companyIds);
+            }
 
             if (($user->email) && ($user->activated == '1')) {
 
@@ -128,7 +205,7 @@ class UserImporter extends ItemImporter
                     try {
                         $user->notify(new WelcomeNotification($user));
                     } catch (\Exception $e) {
-                        Log::warning('Could not send welcome notification for user: ' . $e->getMessage());
+                        Log::warning('Could not send welcome notification for user: '.$e->getMessage());
                     }
 
                 }
@@ -147,36 +224,40 @@ class UserImporter extends ItemImporter
      * Fetch an existing department, or create new if it doesn't exist
      *
      * @author Daniel Melzter
+     *
      * @since 5.0
-     * @param $department_name string
+     *
+     * @param  $department_name  string
      * @return int id of department created/found
      */
     public function createOrFetchDepartment($department_name)
     {
-        if (is_null($department_name) || $department_name == ''){
+        if (is_null($department_name) || $department_name == '') {
             return null;
         }
 
-
         $department = Department::where(['name' => $department_name])->first();
         if ($department) {
-            $this->log('A matching department ' . $department_name . ' already exists');
+            $this->log('A matching department '.$department_name.' already exists');
+
             return $department->id;
         }
 
-        $department = new department();
+        $department = new Department;
         $department->name = $department_name;
         $department->created_by = $this->created_by;
 
         if ($department->save()) {
-            $this->log('department ' . $department_name . ' was created');
+            $this->log('department '.$department_name.' was created');
+
             return $department->id;
         }
 
         $this->logError($department, 'Department');
+
         return null;
     }
-    
+
     public function sendWelcome($send = true)
     {
         $this->send_welcome = $send;
@@ -186,8 +267,6 @@ class UserImporter extends ItemImporter
      * Since the findCsvMatch() method will set '' for columns that are present but empty,
      * we need to set those empty strings to null to avoid passing bad data to the database
      * (ie ending up with 0000-00-00 instead of the intended null).
-     *
-     * @return void
      */
     private function handleEmptyStringsForDates(): void
     {
