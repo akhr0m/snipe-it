@@ -1,0 +1,138 @@
+name: Automated SemVer & Release
+
+on:
+  push:
+    branches:
+      - "feature/custom-bast-module"
+      - "custom-bast-module"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # Fetch all history and tags
+
+      - name: Set up PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.1'
+
+      - name: Determine Version Bump
+        id: versioning
+        run: |
+          # Fetch tags
+          git fetch --tags --force
+          
+          # Get latest tag matching pattern
+          LATEST_TAG=$(git tag -l "v8.1.18-bast.*" | sort -V | tail -n 1)
+          
+          if [ -z "$LATEST_TAG" ]; then
+            NEXT_VERSION="v8.1.18-bast.1.0.0"
+            echo "No existing tag found. Starting with baseline: $NEXT_VERSION"
+          else
+            echo "Latest tag found: $LATEST_TAG"
+            
+            # Guard: check if current commit is already tagged
+            LATEST_TAG_COMMIT=$(git rev-parse "$LATEST_TAG" 2>/dev/null || echo "")
+            CURRENT_COMMIT=$(git rev-parse HEAD)
+            if [ "$LATEST_TAG_COMMIT" = "$CURRENT_COMMIT" ]; then
+              echo "Current commit is already tagged as $LATEST_TAG. Skipping."
+              echo "skip=true" >> $GITHUB_OUTPUT
+              exit 0
+            fi
+            
+            # Extract SemVer suffix part (e.g. 1.0.0 from v8.1.18-bast.1.0.0)
+            VERSION_PART=${LATEST_TAG##*v8.1.18-bast.}
+            
+            # Split into major, minor, patch
+            IFS='.' read -r -a VERSION_PARTS <<< "$VERSION_PART"
+            MAJOR="${VERSION_PARTS[0]:-1}"
+            MINOR="${VERSION_PARTS[1]:-0}"
+            PATCH="${VERSION_PARTS[2]:-0}"
+            
+            # Read commits since last tag
+            COMMITS_MSG=$(git log "$LATEST_TAG..HEAD" --oneline)
+            
+            BUMP="patch"
+            if echo "$COMMITS_MSG" | grep -qi -E "breaking|\[major\]"; then
+              BUMP="major"
+            elif echo "$COMMITS_MSG" | grep -qi -E "feat|\[minor\]"; then
+              BUMP="minor"
+            fi
+            
+            echo "Bump type detected: $BUMP"
+            
+            if [ "$BUMP" = "major" ]; then
+              MAJOR=$((MAJOR + 1))
+              MINOR=0
+              PATCH=0
+            elif [ "$BUMP" = "minor" ]; then
+              MINOR=$((MINOR + 1))
+              PATCH=0
+            else
+              PATCH=$((PATCH + 1))
+            fi
+            
+            NEXT_VERSION="v8.1.18-bast.$MAJOR.$MINOR.$PATCH"
+          fi
+          
+          echo "next_version=$NEXT_VERSION" >> $GITHUB_OUTPUT
+          echo "skip=false" >> $GITHUB_OUTPUT
+
+      - name: Update config/version.php
+        if: steps.versioning.outputs.skip == 'false'
+        run: |
+          NEXT_VERSION="${{ steps.versioning.outputs.next_version }}"
+          COMMIT_HASH=$(git rev-parse --short HEAD)
+          COMMIT_COUNT=$(git rev-list --count HEAD)
+          CURRENT_BRANCH=$(git rev-parse --abbrev-ref HEAD)
+          
+          echo "Updating version.php config to version: $NEXT_VERSION"
+          
+          php -r '
+            $file = "config/version.php";
+            $version = $argv[1];
+            $branch = $argv[2];
+            $hash = $argv[3];
+            $build = $argv[4];
+            
+            $config = include $file;
+            $config["app_version"] = $version;
+            $config["full_app_version"] = "$version - build $build-$hash";
+            $config["build_version"] = $build;
+            $config["hash_version"] = $hash;
+            $config["full_hash"] = "$version-$hash";
+            $config["branch"] = $branch;
+            
+            $content = "<?php\nreturn " . var_export($config, true) . ";\n";
+            file_put_contents($file, $content);
+          ' "$NEXT_VERSION" "$CURRENT_BRANCH" "$COMMIT_HASH" "$COMMIT_COUNT"
+
+      - name: Commit and Push Version Config
+        if: steps.versioning.outputs.skip == 'false'
+        run: |
+          NEXT_VERSION="${{ steps.versioning.outputs.next_version }}"
+          
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+          git add config/version.php
+          git commit -m "chore: bump version to $NEXT_VERSION [skip ci]" || echo "No version changes to commit"
+          git push origin HEAD:${{ github.ref }}
+
+      - name: Create GitHub Release
+        if: steps.versioning.outputs.skip == 'false'
+        run: |
+          NEXT_VERSION="${{ steps.versioning.outputs.next_version }}"
+          NEW_COMMIT_HASH=$(git rev-parse HEAD)
+          
+          echo "Creating Git Tag and GitHub Release for: $NEXT_VERSION"
+          gh release create "$NEXT_VERSION" --target "$NEW_COMMIT_HASH" --title "$NEXT_VERSION" --generate-notes
