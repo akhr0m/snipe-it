@@ -204,14 +204,14 @@
                 <div class="col-md-12" style="padding-top: 5px;">
 
                 @if($user->allAssignedCount() != '0') 
-                  <a href="{{ route('users.print', $user->id) }}" style="width: 100%;" class="btn btn-sm btn-primary btn-social hidden-print" target="_blank" rel="noopener">
-                      <x-icon type="print" />
-                      {{ trans('admin/users/general.print_assigned') }}
+                  <a href="{{ route('bast.preview', $user->id) }}" style="width: 100%;" class="btn btn-sm btn-primary btn-social hidden-print" target="_blank" rel="noopener">
+                      <i class="fa fa-eye"></i>
+                      Preview BAST
                   </a>
                   @else
                   <button style="width: 100%;" class="btn btn-sm btn-primary btn-social hidden-print" rel="noopener" disabled title="{{ trans('admin/users/message.user_has_no_assets_assigned') }}">
-                      <x-icon type="print" />
-                      {{ trans('admin/users/general.print_assigned') }}</button>
+                      <i class="fa fa-eye"></i>
+                      Preview BAST</button>
                 @endif
                 </div>
                 @endcan
