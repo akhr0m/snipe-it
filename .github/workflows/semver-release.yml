@@ -32,11 +32,20 @@ jobs:
           # Fetch tags
           git fetch --tags --force
           
+          # Extract base core version dynamically
+          CORE_VERSION=$(php -r "
+            \$config = include('config/version.php');
+            \$ver = \$config['app_version'] ?? 'v8.6.1';
+            \$parts = explode('-', \$ver);
+            echo \$parts[0];
+          ")
+          echo "Base Core Version detected: $CORE_VERSION"
+          
           # Get latest tag matching pattern
-          LATEST_TAG=$(git tag -l "v8.1.18-bast.*" | sort -V | tail -n 1)
+          LATEST_TAG=$(git tag -l "$CORE_VERSION-bast.*" | sort -V | tail -n 1)
           
           if [ -z "$LATEST_TAG" ]; then
-            NEXT_VERSION="v8.1.18-bast.1.0.0"
+            NEXT_VERSION="$CORE_VERSION-bast.1.0.0"
             echo "No existing tag found. Starting with baseline: $NEXT_VERSION"
           else
             echo "Latest tag found: $LATEST_TAG"
@@ -50,8 +59,8 @@ jobs:
               exit 0
             fi
             
-            # Extract SemVer suffix part (e.g. 1.0.0 from v8.1.18-bast.1.0.0)
-            VERSION_PART=${LATEST_TAG##*v8.1.18-bast.}
+            # Extract SemVer suffix part
+            VERSION_PART=${LATEST_TAG##*$CORE_VERSION-bast.}
             
             # Split into major, minor, patch
             IFS='.' read -r -a VERSION_PARTS <<< "$VERSION_PART"
@@ -82,7 +91,7 @@ jobs:
               PATCH=$((PATCH + 1))
             fi
             
-            NEXT_VERSION="v8.1.18-bast.$MAJOR.$MINOR.$PATCH"
+            NEXT_VERSION="$CORE_VERSION-bast.$MAJOR.$MINOR.$PATCH"
           fi
           
           echo "next_version=$NEXT_VERSION" >> $GITHUB_OUTPUT
