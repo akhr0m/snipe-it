@@ -30,7 +30,7 @@ class BastReport extends Model
 
     protected $casts = [
         'assets_data' => 'array',
-        'date_printed' => 'date',
+        'date_printed' => 'datetime',
     ];
 
     public function user()

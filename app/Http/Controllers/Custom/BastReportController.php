@@ -12,9 +12,17 @@ use Illuminate\Support\Facades\DB;
 class BastReportController extends Controller
 {
     /**
-     * Display a listing of historical BAST reports with search functionality.
+     * Display the BAST reports search page.
      */
     public function search(Request $request)
+    {
+        return view('custom.bast.search');
+    }
+
+    /**
+     * Source JSON data for the BAST reports bootstrap-table.
+     */
+    public function apiIndex(Request $request)
     {
         $query = BastReport::query();
 
@@ -27,9 +35,40 @@ class BastReportController extends Controller
             });
         }
 
-        $reports = $query->orderBy('created_at', 'desc')->paginate(10);
+        $total = $query->count();
 
-        return view('custom.bast.search', compact('reports'));
+        $limit = (int) $request->input('limit', 20);
+        $offset = (int) $request->input('offset', 0);
+        $sort = $request->input('sort', 'created_at');
+        $order = $request->input('order', 'desc') === 'asc' ? 'asc' : 'desc';
+
+        $allowed_columns = ['id', 'bast_number', 'username', 'user_email', 'user_nik', 'date_printed', 'created_at'];
+        if (!in_array($sort, $allowed_columns)) {
+            $sort = 'created_at';
+        }
+
+        $reports = $query->orderBy($sort, $order)
+                         ->skip($offset)
+                         ->take($limit)
+                         ->get();
+
+        $rows = [];
+        foreach ($reports as $report) {
+            $rows[] = [
+                'id' => (int) $report->id,
+                'bast_number' => e($report->bast_number),
+                'username' => e($report->username),
+                'user_email' => e($report->user_email),
+                'user_nik' => e($report->user_nik),
+                'date_printed' => $report->date_printed ? Carbon::parse($report->date_printed)->format('Y-m-d H:i:s') : '',
+                'created_at' => $report->created_at ? $report->created_at->format('Y-m-d H:i:s') : '',
+            ];
+        }
+
+        return response()->json([
+            'total' => $total,
+            'rows' => $rows,
+        ]);
     }
 
     /**

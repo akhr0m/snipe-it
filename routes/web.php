@@ -711,6 +711,7 @@ Route::middleware(['auth'])->get(
 // Custom BAST Module Routes
 Route::group(['middleware' => 'auth', 'namespace' => 'App\Http\Controllers\Custom'], function () {
     Route::get('bast-report/search', [\App\Http\Controllers\Custom\BastReportController::class, 'search'])->name('bast.search');
+    Route::get('bast-report/api', [\App\Http\Controllers\Custom\BastReportController::class, 'apiIndex'])->name('bast.api.index');
     Route::get('users/{id}/bast-report', [\App\Http\Controllers\Custom\BastReportController::class, 'preview'])->name('bast.preview');
     Route::post('bast-report/save', [\App\Http\Controllers\Custom\BastReportController::class, 'save'])->name('bast.save');
     Route::get('bast-report/print/{id}', [\App\Http\Controllers\Custom\BastReportController::class, 'reprint'])->name('bast.reprint');
