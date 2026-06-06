@@ -34,7 +34,7 @@ jobs:
           
           # Extract base core version dynamically
           CORE_VERSION=$(php -r "
-            \$config = include('config/version.php');
+            \$config = file_exists('config/version.php') ? include('config/version.php') : [];
             \$ver = \$config['app_version'] ?? 'v8.6.1';
             \$parts = explode('-', \$ver);
             echo \$parts[0];
@@ -96,46 +96,6 @@ jobs:
           
           echo "next_version=$NEXT_VERSION" >> $GITHUB_OUTPUT
           echo "skip=false" >> $GITHUB_OUTPUT
-
-      - name: Update config/version.php
-        if: steps.versioning.outputs.skip == 'false'
-        run: |
-          NEXT_VERSION="${{ steps.versioning.outputs.next_version }}"
-          COMMIT_HASH=$(git rev-parse --short HEAD)
-          COMMIT_COUNT=$(git rev-list --count HEAD)
-          CURRENT_BRANCH=$(git rev-parse --abbrev-ref HEAD)
-          
-          echo "Updating version.php config to version: $NEXT_VERSION"
-          
-          php -r '
-            $file = "config/version.php";
-            $version = $argv[1];
-            $branch = $argv[2];
-            $hash = $argv[3];
-            $build = $argv[4];
-            
-            $config = include $file;
-            $config["app_version"] = $version;
-            $config["full_app_version"] = "$version - build $build-$hash";
-            $config["build_version"] = $build;
-            $config["hash_version"] = $hash;
-            $config["full_hash"] = "$version-$hash";
-            $config["branch"] = $branch;
-            
-            $content = "<?php\nreturn " . var_export($config, true) . ";\n";
-            file_put_contents($file, $content);
-          ' "$NEXT_VERSION" "$CURRENT_BRANCH" "$COMMIT_HASH" "$COMMIT_COUNT"
-
-      - name: Commit and Push Version Config
-        if: steps.versioning.outputs.skip == 'false'
-        run: |
-          NEXT_VERSION="${{ steps.versioning.outputs.next_version }}"
-          
-          git config --local user.email "github-actions[bot]@users.noreply.github.com"
-          git config --local user.name "github-actions[bot]"
-          git add config/version.php
-          git commit -m "chore: bump version to $NEXT_VERSION [skip ci]" || echo "No version changes to commit"
-          git push origin HEAD:${{ github.ref }}
 
       - name: Create GitHub Release
         if: steps.versioning.outputs.skip == 'false'
