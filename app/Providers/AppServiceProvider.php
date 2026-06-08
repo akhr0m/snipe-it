@@ -90,6 +90,74 @@ class AppServiceProvider extends ServiceProvider
         Maintenance::observe(MaintenanceObserver::class);
         Setting::observe(SettingObserver::class);
         User::observe(UserObserver::class);
+
+        // Fallback version configuration if config/version.php is missing or empty
+        if (!config()->has('version') || empty(config('version.app_version'))) {
+            $cacheFile = storage_path('framework/version_cache.json');
+            $versionData = null;
+
+            $isLocal = app()->environment('local');
+            if (!$isLocal && file_exists($cacheFile) && (time() - filemtime($cacheFile) < 3600)) {
+                $versionData = json_decode(file_get_contents($cacheFile), true);
+            }
+
+            if (!$versionData) {
+                $appVersion = 'v8.6.1-bast.1.0.1';
+                $buildVersion = '23109';
+                $hashVersion = 'unknown';
+                $branch = 'feature/custom-bast-module';
+
+                if (is_dir(base_path('.git'))) {
+                    try {
+                        $gitBranch = @shell_exec('git rev-parse --abbrev-ref HEAD 2>&1');
+                        if ($gitBranch && !str_contains($gitBranch, 'not recognized') && !str_contains($gitBranch, 'fatal')) {
+                            $branch = trim($gitBranch);
+                            $gitHash = @shell_exec('git rev-parse --short HEAD 2>&1');
+                            if ($gitHash && !str_contains($gitHash, 'fatal')) {
+                                $hashVersion = trim($gitHash);
+                            }
+                            $gitBuild = @shell_exec('git rev-list --count HEAD 2>&1');
+                            if ($gitBuild && !str_contains($gitBuild, 'fatal')) {
+                                $buildVersion = trim($gitBuild);
+                            }
+                            // Try to get latest tag matching v*-bast.*
+                            $gitTag = @shell_exec('git describe --tags --match "v*-bast.*" --abbrev=0 2>&1');
+                            if ($gitTag && !str_contains($gitTag, 'fatal') && !str_contains($gitTag, 'not recognized')) {
+                                $latestTag = trim($gitTag);
+                                // Check commits since that tag
+                                $commitsSince = @shell_exec("git rev-list --count {$latestTag}..HEAD 2>&1");
+                                if ($commitsSince && !str_contains($commitsSince, 'fatal')) {
+                                    $commitsCount = (int)trim($commitsSince);
+                                    if ($commitsCount > 0) {
+                                        $appVersion = "{$latestTag}-dev.{$commitsCount}";
+                                    } else {
+                                        $appVersion = $latestTag;
+                                    }
+                                } else {
+                                    $appVersion = $latestTag;
+                                }
+                            }
+                        }
+                    } catch (\Throwable $e) {
+                        // Fall back to hardcoded defaults
+                    }
+                }
+
+                $versionData = [
+                    'app_version' => $appVersion,
+                    'full_app_version' => "{$appVersion} - build {$buildVersion}-{$hashVersion}",
+                    'build_version' => $buildVersion,
+                    'prerelease_version' => '',
+                    'hash_version' => $hashVersion,
+                    'full_hash' => "{$appVersion}-{$hashVersion}",
+                    'branch' => $branch,
+                ];
+
+                @file_put_contents($cacheFile, json_encode($versionData));
+            }
+
+            config(['version' => $versionData]);
+        }
     }
 
     /**
