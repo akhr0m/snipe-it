@@ -85,7 +85,7 @@
             color: #000 !important;
             font-weight: normal;
         }
-        .meta-col td.separator {
+        .meta-col td.colon-separator {
             width: 15px;
             text-align: center;
         }
@@ -290,24 +290,24 @@
             <table>
                 <tr>
                     <td class="meta-label">Nama / Departemen</td>
-                    <td class="separator">:</td>
+                    <td class="colon-separator">:</td>
                     <td>{{ $admName }} / {{ $admDept }}</td>
                 </tr>
                 <tr>
                     <td class="meta-label">NIK</td>
-                    <td class="separator">:</td>
+                    <td class="colon-separator">:</td>
                     <td>
                         <span id="admin-nik-field" {!! !$isReprint ? 'class="editable" contenteditable="true"' : '' !!} style="min-width: 150px; display: inline-block;">{{ $isReprint ? $report->admin_nik : '' }}</span>
                     </td>
                 </tr>
                 <tr>
                     <td class="meta-label">Lokasi</td>
-                    <td class="separator">:</td>
+                    <td class="colon-separator">:</td>
                     <td>{{ $admLoc }}</td>
                 </tr>
                 <tr>
                     <td class="meta-label">Hari / Tanggal</td>
-                    <td class="separator">:</td>
+                    <td class="colon-separator">:</td>
                     <td>{{ $datePrintedStr }}</td>
                 </tr>
             </table>
@@ -318,24 +318,24 @@
             <table>
                 <tr>
                     <td class="meta-label">Tujuan / Jabatan (Departemen)</td>
-                    <td class="separator">:</td>
+                    <td class="colon-separator">:</td>
                     <td>{{ $usrName }} - {{ $usrJob }} {{ $usrDept ? '('.$usrDept.')' : '' }}</td>
                 </tr>
                 <tr>
                     <td class="meta-label">NIK</td>
-                    <td class="separator">:</td>
+                    <td class="colon-separator">:</td>
                     <td>
                         <span id="user-nik-field" {!! !$isReprint ? 'class="editable" contenteditable="true"' : '' !!} style="min-width: 150px; display: inline-block;">{{ $isReprint ? $report->user_nik : '' }}</span>
                     </td>
                 </tr>
                 <tr>
                     <td class="meta-label">Lokasi</td>
-                    <td class="separator">:</td>
+                    <td class="colon-separator">:</td>
                     <td>{{ $usrLoc ?: '-' }}</td>
                 </tr>
                 <tr>
                     <td class="meta-label">Perihal</td>
-                    <td class="separator">:</td>
+                    <td class="colon-separator">:</td>
                     <td>
                         <span id="perihal-field" {!! !$isReprint ? 'class="editable" contenteditable="true"' : '' !!} style="min-width: 200px; display: inline-block;">{{ $perihalText }}</span>
                     </td>
