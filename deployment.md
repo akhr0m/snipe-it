@@ -117,6 +117,9 @@ Expected output:
 - Prevents merge conflicts in version configuration
 - Ensures version info is always accurate
 
+> [!NOTE]
+> **Dynamic Fallback Active**: If this script is skipped or fails during deployment, a dynamic runtime fallback in `AppServiceProvider` will automatically detect the Git version/build details (and cache it in `storage/framework/version_cache.json`), ensuring the footer displays the correct version without causing a blank screen or a `Version - build ()` display.
+
 ### Step 5: Install PHP Dependencies
 
 Install or update PHP packages using Composer:
