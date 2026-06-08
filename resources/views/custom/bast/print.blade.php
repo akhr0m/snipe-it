@@ -235,12 +235,12 @@
     $isReprint = isset($report);
     $bastNum = $isReprint ? $report->bast_number : $bastNumber;
     
-    $admName = $isReprint ? $report->admin_name : $admin->present()->fullName();
+    $admName = $isReprint ? $report->admin_name : $admin->present()->fullName;
     $admDept = $isReprint ? $report->admin_department : ($admin->department ? $admin->department->name : 'IT');
     $admTitle = $isReprint ? $report->admin_title : ($admin->jobtitle ?: 'IT OFFICER');
     $admLoc = $isReprint ? $report->admin_location : ($admin->location ? $admin->location->name : 'Wisma RMK (JAKARTA)');
     
-    $usrName = $isReprint ? $report->username : $user->present()->fullName();
+    $usrName = $isReprint ? $report->username : $user->present()->fullName;
     $usrDept = $isReprint ? $report->user_department : ($user->department ? $user->department->name : '');
     $usrJob = $isReprint ? $report->user_jobtitle : $user->jobtitle;
     $usrNik = $isReprint ? $report->user_nik : $user->employee_num;

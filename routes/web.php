@@ -766,3 +766,4 @@ Route::group(['middleware' => 'auth', 'namespace' => 'App\Http\Controllers\Custo
     Route::post('bast-report/save', [\App\Http\Controllers\Custom\BastReportController::class, 'save'])->name('bast.save');
     Route::get('bast-report/print/{id}', [\App\Http\Controllers\Custom\BastReportController::class, 'reprint'])->name('bast.reprint');
 });
+
