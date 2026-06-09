@@ -143,6 +143,8 @@ class BastReportController extends Controller
             'admin_name' => $admin->present()->fullName,
             'admin_nik' => $request->input('admin_nik'),
             'admin_title' => $admin->jobtitle ?: 'IT OFFICER',
+            'admin_department' => $admin->department ? $admin->department->name : 'IT',
+            'admin_location' => $admin->location ? $admin->location->name : 'Wisma RMK (JAKARTA)',
             'date_printed' => Carbon::now(),
             'perihal' => $request->input('perihal', 'Penyerahan Aset (Inventaris Kantor)'),
             'notes' => $request->input('notes'),

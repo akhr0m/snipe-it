@@ -21,6 +21,8 @@ class BastReport extends Model
         'admin_name',
         'admin_nik',
         'admin_title',
+        'admin_department',
+        'admin_location',
         'date_printed',
         'perihal',
         'notes',
