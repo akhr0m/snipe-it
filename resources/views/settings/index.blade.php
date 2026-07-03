@@ -181,7 +181,7 @@
                 </div>
             </div>
 
-            <div class="col-md-4 col-lg-3 col-sm-6 col-xl-1">
+            <div class="col-md-4 col-lg-3 col-sm-6 col-xl-1" style="pointer-events: none;">
                 <div class="admin box box-default">
                     <div class="box-body text-center">
                         <h5>
