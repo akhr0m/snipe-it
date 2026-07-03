@@ -73,3 +73,5 @@ storage/ldap_client_tls.key
 /.phpunit.cache
 config/version.php
 storage/framework/version_cache.json
+.agents/*
+
