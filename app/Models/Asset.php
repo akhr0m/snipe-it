@@ -1144,6 +1144,8 @@ class Asset extends Depreciable
      */
     public static function autoincrement_asset(int $additional_increment = 0)
     {
+        return \App\Services\CustomAssetTagService::generateTag();
+
         $settings = Setting::getSettings();
 
         if ($settings->auto_increment_assets == '1') {
