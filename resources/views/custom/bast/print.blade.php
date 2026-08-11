@@ -274,7 +274,8 @@
             }
 
             .action-bar,
-            .hidden-print {
+            .hidden-print,
+            #success-toast {
                 display: none !important;
             }
 
